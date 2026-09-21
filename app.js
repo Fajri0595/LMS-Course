@@ -1264,7 +1264,6 @@
     }).join('');
 
     const isCompleted = currentUnit.completed;
-    const isStudent = AppState.currentRole === 'student';
 
     // Parse estimasi durasi menjadi detik
     const parseDurationSeconds = (durStr) => {
