@@ -94,24 +94,24 @@
             </div>
           </div>
 
-          <!-- Tab Switcher: Masuk vs Daftar Pendidik -->
+          <!-- Tab Switcher: Mahasiswa vs Dosen -->
           <div class="auth-tabs">
-            <button type="button" class="auth-tab-btn active" id="tab-btn-login" onclick="switchAuthTab('login')">
-              Masuk (Login)
+            <button type="button" class="auth-tab-btn active" id="tab-btn-mahasiswa" onclick="switchLoginRole('mahasiswa')">
+              <span style="margin-right:.375rem;">🎓</span> Mahasiswa
             </button>
-            <button type="button" class="auth-tab-btn" id="tab-btn-signup" onclick="switchAuthTab('signup')">
-              Daftar Guru Baru
+            <button type="button" class="auth-tab-btn" id="tab-btn-dosen" onclick="switchLoginRole('dosen')">
+              <span style="margin-right:.375rem;">👨‍🏫</span> Dosen
             </button>
           </div>
 
           <div id="login-error" class="login-error" style="display:none;"></div>
           <div id="login-success" class="login-success" style="display:none;"></div>
 
-          <!-- FORM 1: LOGIN (Guru, Siswa, Admin) -->
+          <!-- FORM LOGIN (Mahasiswa & Dosen — dibedakan secara visual) -->
           <form id="form-login" onsubmit="handleLogin(event)">
             <div class="form-group">
-              <label class="form-label">Email Institusi / Gmail</label>
-              <input type="email" id="login-email" class="form-control" placeholder="contoh: nama@gmail.com" required autocomplete="email">
+              <label class="form-label" id="login-email-label">Email Mahasiswa</label>
+              <input type="email" id="login-email" class="form-control" placeholder="contoh: nama@mahasiswa.ac.id" required autocomplete="email">
             </div>
             <div class="form-group">
               <label class="form-label">Password</label>
@@ -121,39 +121,11 @@
               </div>
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
-              Masuk ke Dashboard
+              <span id="login-btn-icon" style="margin-right:.375rem;">🎓</span>
+              <span id="login-btn-text">Masuk sebagai Mahasiswa</span>
             </button>
-            <p style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
-              Peserta didik mendapatkan akun yang didaftarkan langsung oleh guru pengampu.
-            </p>
-          </form>
-
-          <!-- FORM 2: SIGN UP PENDIDIK (Gmail Pribadi) -->
-          <form id="form-signup" onsubmit="handleSignUp(event)" style="display:none;">
-            <div class="form-group">
-              <label class="form-label">Nama Lengkap & Gelar</label>
-              <input type="text" id="signup-name" class="form-control" placeholder="contoh: Budi Santoso, S.Pd." required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Bidang Studi / Mata Pelajaran</label>
-              <input type="text" id="signup-subject" class="form-control" placeholder="contoh: Fisika, Matematika, Biologi" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Email Gmail / Pribadi</label>
-              <input type="email" id="signup-email" class="form-control" placeholder="contoh: budi.santoso@gmail.com" required autocomplete="email">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Buat Password Baru (min. 6 karakter)</label>
-              <div style="position:relative;">
-                <input type="password" id="signup-password" class="form-control" placeholder="Minimal 6 karakter" minlength="6" required autocomplete="new-password" style="padding-right:3rem;">
-                <button type="button" onclick="togglePasswordVis('signup-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);">👁️</button>
-              </div>
-            </div>
-            <button type="submit" class="btn btn-authoritative" style="width:100%;margin-top:.75rem;" id="signup-submit-btn">
-              Daftar Sebagai Pendidik
-            </button>
-            <p style="text-align:center;font-size:.75rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
-              Khusus Pendidik / Guru Pengampu. Peserta didik didaftarkan oleh guru di kelas masing-masing.
+            <p id="login-hint-text" style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
+              Akun mahasiswa didaftarkan oleh dosen pengampu masing-masing kelas.
             </p>
           </form>
 
@@ -163,28 +135,37 @@
     loginEl.style.display = 'flex';
   }
 
-  function switchAuthTab(tab) {
-    const isLogin = tab === 'login';
-    const formLogin = document.getElementById('form-login');
-    const formSignup = document.getElementById('form-signup');
-    const tabLogin = document.getElementById('tab-btn-login');
-    const tabSignup = document.getElementById('tab-btn-signup');
+  function switchLoginRole(role) {
+    const isMahasiswa = role === 'mahasiswa';
+    const tabMhs = document.getElementById('tab-btn-mahasiswa');
+    const tabDosen = document.getElementById('tab-btn-dosen');
     const errEl = document.getElementById('login-error');
     const succEl = document.getElementById('login-success');
+    const emailLabel = document.getElementById('login-email-label');
+    const emailInput = document.getElementById('login-email');
+    const btnIcon = document.getElementById('login-btn-icon');
+    const btnText = document.getElementById('login-btn-text');
+    const hintText = document.getElementById('login-hint-text');
 
     if (errEl) errEl.style.display = 'none';
     if (succEl) succEl.style.display = 'none';
 
-    if (isLogin) {
-      if (formLogin) formLogin.style.display = 'block';
-      if (formSignup) formSignup.style.display = 'none';
-      if (tabLogin) tabLogin.classList.add('active');
-      if (tabSignup) tabSignup.classList.remove('active');
+    if (isMahasiswa) {
+      if (tabMhs) tabMhs.classList.add('active');
+      if (tabDosen) tabDosen.classList.remove('active');
+      if (emailLabel) emailLabel.textContent = 'Email Mahasiswa';
+      if (emailInput) emailInput.placeholder = 'contoh: nama@mahasiswa.ac.id';
+      if (btnIcon) btnIcon.textContent = '🎓';
+      if (btnText) btnText.textContent = 'Masuk sebagai Mahasiswa';
+      if (hintText) hintText.textContent = 'Akun mahasiswa didaftarkan oleh dosen pengampu masing-masing kelas.';
     } else {
-      if (formLogin) formLogin.style.display = 'none';
-      if (formSignup) formSignup.style.display = 'block';
-      if (tabLogin) tabLogin.classList.remove('active');
-      if (tabSignup) tabSignup.classList.add('active');
+      if (tabMhs) tabMhs.classList.remove('active');
+      if (tabDosen) tabDosen.classList.add('active');
+      if (emailLabel) emailLabel.textContent = 'Email Dosen';
+      if (emailInput) emailInput.placeholder = 'contoh: nama@dosen.ac.id';
+      if (btnIcon) btnIcon.textContent = '👨‍🏫';
+      if (btnText) btnText.textContent = 'Masuk sebagai Dosen';
+      if (hintText) hintText.textContent = 'Gunakan email dan password yang sudah terdaftar di sistem.';
     }
   }
 
@@ -194,6 +175,7 @@
     const password = document.getElementById('login-password').value;
     const btn = document.getElementById('login-submit-btn');
     const errEl = document.getElementById('login-error');
+    const loginBtnOriginal = btn.innerHTML;
 
     btn.disabled = true;
     btn.textContent = 'Memverifikasi...';
@@ -203,7 +185,7 @@
     if (!sb) {
       showLoginError('Koneksi Supabase tidak tersedia.');
       btn.disabled = false;
-      btn.textContent = 'Masuk ke Dashboard';
+      btn.innerHTML = loginBtnOriginal;
       return;
     }
 
@@ -211,92 +193,9 @@
     if (error) {
       showLoginError('Email atau password salah. ' + (error.message || ''));
       btn.disabled = false;
-      btn.textContent = 'Masuk ke Dashboard';
+      btn.innerHTML = loginBtnOriginal;
     }
     // Jika berhasil, onAuthStateChange akan memicu handleSessionStart()
-  }
-
-  async function handleSignUp(e) {
-    e.preventDefault();
-    const name = document.getElementById('signup-name').value.trim();
-    const subject = document.getElementById('signup-subject').value.trim();
-    const email = document.getElementById('signup-email').value.trim();
-    const password = document.getElementById('signup-password').value;
-    const btn = document.getElementById('signup-submit-btn');
-    const errEl = document.getElementById('login-error');
-    const succEl = document.getElementById('login-success');
-
-    btn.disabled = true;
-    btn.textContent = 'Mendaftarkan Akun...';
-    if (errEl) errEl.style.display = 'none';
-    if (succEl) succEl.style.display = 'none';
-
-    const sb = getSupabase();
-    if (!sb) {
-      showLoginError('Koneksi Supabase tidak tersedia.');
-      btn.disabled = false;
-      btn.textContent = 'Daftar Sebagai Pendidik';
-      return;
-    }
-
-    try {
-      // 1. Sign up ke Supabase Auth
-      const { data: authData, error: authErr } = await sb.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name, role: 'educator', subject }
-        }
-      });
-
-      if (authErr) throw authErr;
-
-      const authUser = authData?.user;
-      if (!authUser) throw new Error('Gagal membuat autentikasi pengguna.');
-
-      // 2. Simpan/sinkronkan ke tabel public.profiles
-      const { error: profileErr } = await sb.from('profiles').upsert([{
-        id: authUser.id,
-        auth_user_id: authUser.id,
-        name: name,
-        email: email,
-        role: 'educator',
-        subject: subject || 'Umum',
-        status: 'Aktif'
-      }], { onConflict: 'id' });
-
-      if (profileErr) {
-        console.warn('Upsert profile warning:', profileErr);
-      }
-
-      // Jika session langsung aktif (auto-confirm enabled di Supabase)
-      if (authData.session) {
-        showToast(`🎉 Selamat datang, ${name}! Pendaftaran berhasil.`, 'success');
-        AppState.authUser = authUser;
-        AppState.user = {
-          id: authUser.id,
-          name: name,
-          email: email,
-          role: 'educator',
-          subject: subject,
-          status: 'Aktif'
-        };
-        hideLoginPage();
-        await initApp();
-      } else {
-        // Jika Supabase membutuhkan konfirmasi email
-        succEl.textContent = '✅ Pendaftaran berhasil! Silakan masuk menggunakan email dan password Anda.';
-        succEl.style.display = 'block';
-        document.getElementById('login-email').value = email;
-        switchAuthTab('login');
-        btn.disabled = false;
-        btn.textContent = 'Daftar Sebagai Pendidik';
-      }
-    } catch (err) {
-      showLoginError('Gagal mendaftar: ' + (err.message || 'Terjadi kesalahan sistem'));
-      btn.disabled = false;
-      btn.textContent = 'Daftar Sebagai Pendidik';
-    }
   }
 
   async function handleSessionStart(authUser) {
