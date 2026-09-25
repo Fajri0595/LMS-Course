@@ -1490,13 +1490,13 @@
             <div class="exam-option-card ${selectedOpt === optIdx ? 'selected' : ''}" 
                  onclick="selectQuizOption(${q.id}, ${optIdx})">
               <input type="radio" name="q_${q.id}" value="${optIdx}" ${selectedOpt === optIdx ? 'checked' : ''}>
-              <span style="font-size:0.875rem;color:#334155;line-height:1.4;">${escHtml(opt)}</span>
+              <span style="font-size:0.875rem;color:#334155;line-height:1.5;flex:1;" dir="auto">${escHtml(opt)}</span>
             </div>
           `).join('');
 
           return `
             <div class="exam-question-item" id="quiz-q-${q.id}">
-              <div class="exam-question-text"><strong>${qIdx + 1}.</strong> ${escHtml(q.question)}</div>
+              <div class="exam-question-text" dir="auto"><strong>${qIdx + 1}.</strong> ${escHtml(q.question)}</div>
               <div>${optionsHtml}</div>
             </div>
           `;
@@ -1504,7 +1504,7 @@
 
         contentHtml = `
           <div class="exam-container">
-            <div class="exam-intro-card">
+            <div class="exam-intro-card" dir="auto">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
                 <span class="badge badge-primary">${currentUnit.type === 'pre_exam' ? 'Pra-Pembelajaran' : 'Uji Pemahaman'}</span>
                 <span style="font-size:0.8125rem;color:var(--tertiary);font-weight:600;">⏱️ Estimasi: ${escHtml(currentUnit.duration || '15 Menit')}</span>
@@ -1596,7 +1596,7 @@
                 Browser Anda tidak mendukung tag video HTML5.
               </video>
             </div>
-            ${currentUnit.contentBody ? `<div style="line-height:1.8;font-size:1rem;">${currentUnit.contentBody}</div>` : ''}
+            ${currentUnit.contentBody ? `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody}</div>` : ''}
           `;
         } else if (isYoutube) {
           const embedSrc = currentUnit.embedUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'www.youtube-nocookie.com/embed/');
@@ -1604,11 +1604,11 @@
             <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin-bottom:1.5rem;background:#000;">
               <iframe src="${embedSrc}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
             </div>
-            ${currentUnit.contentBody ? `<div style="line-height:1.8;font-size:1rem;">${currentUnit.contentBody}</div>` : ''}
+            ${currentUnit.contentBody ? `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody}</div>` : ''}
           `;
         }
       } else {
-        contentHtml = `<div style="line-height:1.8;font-size:1rem;">${currentUnit.contentBody || '<p style="color:var(--tertiary);">Konten belum tersedia.</p>'}</div>`;
+        contentHtml = `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody || '<p style="color:var(--tertiary);">Konten belum tersedia.</p>'}</div>`;
       }
     }
 
@@ -1678,7 +1678,7 @@
           <div class="player-content-header">
             <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
               <span class="badge badge-${(currentUnit.type || 'materi').toLowerCase()}">${currentUnit.type}</span>
-              <h2 style="font-size:1.2rem;margin:0;">${escHtml(currentUnit.title)}</h2>
+              <h2 style="font-size:1.2rem;margin:0;" dir="auto">${escHtml(currentUnit.title)}</h2>
               ${timerWidgetHtml}
             </div>
             <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Mode Layar Penuh IFP">
@@ -1686,7 +1686,7 @@
             </button>
           </div>
 
-          <div class="player-content-body" id="player-body">
+          <div class="player-content-body" id="player-body" dir="auto">
             ${contentHtml}
           </div>
 

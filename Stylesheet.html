@@ -1,5 +1,5 @@
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Courier+Prime&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Courier+Prime&display=swap');
 
   :root {
     /* Color Palette - Modern Academic Utility */
@@ -57,9 +57,10 @@
     --badge-kuis-bg: #e0e7ff;
     --badge-kuis-text: #3730a3;
     
-    /* Typography Tokens */
-    --font-heading: 'Noto Serif', Georgia, serif;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    /* Typography Tokens (Support Latin & Arabic / Quranic Texts) */
+    --font-heading: 'Noto Serif', 'Amiri', Georgia, serif;
+    --font-body: 'Inter', 'Noto Naskh Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-arabic: 'Amiri', 'Noto Naskh Arabic', 'Traditional Arabic', 'Segoe UI', serif;
     --font-mono: 'Courier Prime', monospace;
     
     /* Elevation Shadows */
@@ -1271,6 +1272,30 @@
   .btn-next-action:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+
+  /* Dukungan Karakter & Tipografi Arab / RTL / Harakat */
+  .arabic-text, [dir="rtl"], .text-arabic {
+    font-family: var(--font-arabic);
+    direction: rtl;
+    text-align: right;
+    line-height: 2.3;
+    font-size: 1.35rem;
+    letter-spacing: 0;
+    word-spacing: 1px;
+  }
+  .arabic-inline {
+    font-family: var(--font-arabic);
+    font-size: 1.2em;
+    direction: rtl;
+    unicode-bidi: embed;
+    line-height: 1.8;
+    display: inline-block;
+  }
+  .player-content-body[dir="auto"],
+  .exam-question-text[dir="auto"],
+  .exam-intro-card[dir="auto"] {
+    unicode-bidi: plaintext;
   }
 
   /* Interactive Flat Panel (IFP) Mode Styling */
