@@ -578,7 +578,7 @@
     if (error) throw error;
   }
 
-  async function dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, sectionName, orderIndex }) {
+  async function dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, sectionName, orderIndex, quizData, passingScore }) {
     const sb = getSupabase();
     if (!sb) throw new Error('Supabase tidak tersedia');
     const { data, error } = await sb.from('course_contents').insert([{
@@ -589,13 +589,15 @@
       embed_url: embedUrl || null,
       content_body: contentBody || '',
       section_name: sectionName || '',
-      order_index: orderIndex || 1
+      order_index: orderIndex || 1,
+      quiz_data: quizData || null,
+      passing_score: passingScore || 70
     }]).select().single();
     if (error) throw error;
     return data;
   }
 
-  async function dbEditContent(contentId, { title, type, duration, embedUrl, contentBody, sectionName }) {
+  async function dbEditContent(contentId, { title, type, duration, embedUrl, contentBody, sectionName, quizData, passingScore }) {
     const sb = getSupabase();
     if (!sb) throw new Error('Supabase tidak tersedia');
     const updatePayload = {
@@ -606,6 +608,8 @@
       content_body: contentBody || ''
     };
     if (sectionName !== undefined) updatePayload.section_name = sectionName;
+    if (quizData !== undefined) updatePayload.quiz_data = quizData;
+    if (passingScore !== undefined) updatePayload.passing_score = passingScore;
     const { error } = await sb.from('course_contents').update(updatePayload).eq('id', contentId);
     if (error) throw error;
   }
@@ -2472,13 +2476,26 @@
     }
   }
 
+  // --- State Editor & Quiz Builder ---
+  let currentEditorMode = 'visual'; // 'visual' | 'html' | 'preview'
+  let currentQuizData = []; // [{ id, question, options: [], answerIndex, explanation }]
+
   // --- Add/Edit Content ---
   function openModalAddContent(courseId) {
+    const modal = document.getElementById('global-modal');
+    const modalBox = modal ? modal.querySelector('.modal-box') : null;
+    if (modalBox) modalBox.classList.add('modal-lg');
+
+    currentEditorMode = 'visual';
+    currentQuizData = [];
+
     document.getElementById('modal-title').textContent = 'Tambah Unit Konten Pembelajaran';
     document.getElementById('modal-content').innerHTML = buildContentForm(courseId);
     document.getElementById('modal-action-btn').textContent = 'Tambahkan Unit';
     document.getElementById('modal-action-btn').onclick = () => document.getElementById('form-add-unit').requestSubmit();
-    document.getElementById('global-modal').classList.add('active');
+    modal.classList.add('active');
+
+    initEditorAfterMount(courseId, null);
   }
 
   function openModalEditContent(courseId, contentId, unitJson) {
@@ -2491,24 +2508,490 @@
       try { unit = JSON.parse(unit.replace(/&apos;/g, "'")); } catch(e) { unit = {}; }
     }
     unit = unit || {};
+
+    const modal = document.getElementById('global-modal');
+    const modalBox = modal ? modal.querySelector('.modal-box') : null;
+    if (modalBox) modalBox.classList.add('modal-lg');
+
+    currentEditorMode = 'visual';
+    currentQuizData = Array.isArray(unit.quizData) ? JSON.parse(JSON.stringify(unit.quizData)) : [];
+
     document.getElementById('modal-title').textContent = 'Edit Unit Konten';
     document.getElementById('modal-content').innerHTML = buildContentForm(courseId, unit, contentId);
     document.getElementById('modal-action-btn').textContent = 'Simpan Perubahan';
     document.getElementById('modal-action-btn').onclick = () => document.getElementById('form-add-unit').requestSubmit();
-    document.getElementById('global-modal').classList.add('active');
+    modal.classList.add('active');
+
+    initEditorAfterMount(courseId, unit);
+  }
+
+  function initEditorAfterMount(courseId, unit) {
+    // Jalankan pengecekan jenis konten untuk menampilkan/menyembunyikan Quiz Builder
+    const typeSelect = document.getElementById('unit-type');
+    if (typeSelect) {
+      toggleContentEditorFields(typeSelect.value);
+    }
+    renderQuizBuilderQuestions();
+
+    // Pastikan area visual sinkron saat pertama load
+    const visualEl = document.getElementById('unit-body-visual');
+    const textareaEl = document.getElementById('unit-body');
+    if (visualEl && textareaEl) {
+      if (unit && unit.contentBody) {
+        visualEl.innerHTML = unit.contentBody;
+        textareaEl.value = unit.contentBody;
+      }
+      visualEl.addEventListener('input', () => {
+        if (textareaEl) textareaEl.value = visualEl.innerHTML;
+      });
+    }
+  }
+
+  function toggleContentEditorFields(type) {
+    const typeLower = (type || '').toLowerCase();
+    const isQuiz = ['kuis_popup', 'pre_exam', 'post_exam', 'evaluasi', 'kuis'].includes(typeLower);
+    const quizSection = document.getElementById('section-quiz-builder');
+    if (quizSection) {
+      quizSection.style.display = isQuiz ? 'block' : 'none';
+      if (isQuiz && (!currentQuizData || currentQuizData.length === 0)) {
+        // Berikan contoh soal starter awal jika kuis masih kosong
+        currentQuizData = [
+          {
+            id: 1,
+            question: '',
+            options: ['', '', '', ''],
+            answerIndex: 0,
+            explanation: ''
+          }
+        ];
+        renderQuizBuilderQuestions();
+      }
+    }
+  }
+
+  function switchEditorTab(targetMode) {
+    const visualEl = document.getElementById('unit-body-visual');
+    const htmlEl = document.getElementById('unit-body');
+    const previewEl = document.getElementById('unit-body-preview');
+    const toolbarEl = document.getElementById('visual-toolbar');
+    const presetsEl = document.getElementById('editor-presets-container');
+
+    if (!visualEl || !htmlEl || !previewEl) return;
+
+    // Sinkronisasi data antar tab sebelum berpindah
+    if (currentEditorMode === 'visual') {
+      htmlEl.value = visualEl.innerHTML;
+    } else if (currentEditorMode === 'html') {
+      visualEl.innerHTML = htmlEl.value;
+    }
+
+    // Update active tab buttons
+    ['visual', 'html', 'preview'].forEach(mode => {
+      const btn = document.getElementById(`tab-btn-${mode}`);
+      if (btn) btn.classList.toggle('active', mode === targetMode);
+    });
+
+    // Atur tampilan area editor
+    if (targetMode === 'visual') {
+      visualEl.style.display = 'block';
+      htmlEl.style.display = 'none';
+      previewEl.style.display = 'none';
+      if (toolbarEl) toolbarEl.style.display = 'flex';
+      if (presetsEl) presetsEl.style.display = 'flex';
+    } else if (targetMode === 'html') {
+      visualEl.style.display = 'none';
+      htmlEl.style.display = 'block';
+      previewEl.style.display = 'none';
+      if (toolbarEl) toolbarEl.style.display = 'none';
+      if (presetsEl) presetsEl.style.display = 'flex';
+    } else if (targetMode === 'preview') {
+      visualEl.style.display = 'none';
+      htmlEl.style.display = 'none';
+      previewEl.style.display = 'block';
+      if (toolbarEl) toolbarEl.style.display = 'none';
+      if (presetsEl) presetsEl.style.display = 'none';
+
+      // Render isi ke pratinjau siswa
+      const currentHtml = htmlEl.value || visualEl.innerHTML || '<p style="color:var(--tertiary);font-style:italic;">Belum ada isi materi.</p>';
+      previewEl.innerHTML = currentHtml;
+    }
+
+    currentEditorMode = targetMode;
+  }
+
+  function execEditorCmd(command, value = null) {
+    const visualEl = document.getElementById('unit-body-visual');
+    if (!visualEl) return;
+    visualEl.focus();
+    document.execCommand(command, false, value);
+    const textareaEl = document.getElementById('unit-body');
+    if (textareaEl) textareaEl.value = visualEl.innerHTML;
+  }
+
+  function promptInsertLink() {
+    const url = prompt('Masukkan URL tautan web (misal: https://example.com):');
+    if (url && url.trim()) {
+      execEditorCmd('createLink', url.trim());
+    }
+  }
+
+  function promptInsertImage() {
+    const url = prompt('Masukkan URL gambar langsung (misal: https://.../gambar.png):');
+    if (url && url.trim()) {
+      execEditorCmd('insertImage', url.trim());
+    }
+  }
+
+  function insertCalloutTemplate(templateKey) {
+    const visualEl = document.getElementById('unit-body-visual');
+    const htmlEl = document.getElementById('unit-body');
+
+    let templateHtml = '';
+    switch (templateKey) {
+      case 'info':
+        templateHtml = `
+<div class="lms-box-info">
+  <strong>🎯 Tujuan Pembelajaran:</strong>
+  <p>Setelah menyelesaikan unit ini, peserta didik mampu mengidentifikasi dan menerapkan konsep...</p>
+</div>
+<p><br></p>`;
+        break;
+
+      case 'tip':
+        templateHtml = `
+<div class="lms-box-tip">
+  💡 <strong>Tips Belajar:</strong>
+  <p>Gunakan catatan mandiri dan cermati contoh kasus berikut untuk mempermudah pemahaman.</p>
+</div>
+<p><br></p>`;
+        break;
+
+      case 'warning':
+        templateHtml = `
+<div class="lms-box-warning">
+  ⚠️ <strong>Penting untuk Diperhatikan:</strong>
+  <p>Pastikan seluruh langkah perhitungan dan validasi data telah sesuai dengan standar sebelum lanjut.</p>
+</div>
+<p><br></p>`;
+        break;
+
+      case 'arabic':
+        templateHtml = `
+<div class="lms-arabic-box" style="padding:1.25rem;background:#fdfcfe;border:1px solid #e9d5ff;border-radius:8px;margin:1.25rem 0;">
+  <div class="arabic-text" dir="rtl" style="font-size:1.45rem;line-height:2.2;text-align:right;color:#1e1b4b;margin-bottom:0.75rem;">
+    بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+  </div>
+  <p style="font-size:0.875rem;color:var(--tertiary);font-style:italic;margin:0;">
+    Artinya: "Dengan menyebut nama Allah Yang Maha Pengasih lagi Maha Penyayang."
+  </p>
+</div>
+<p><br></p>`;
+        break;
+
+      case 'table':
+        templateHtml = `
+<table class="lms-table">
+  <thead>
+    <tr>
+      <th style="width:30%;">Indikator / Kategori</th>
+      <th>Uraian &amp; Penerapan Pembelajaran</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Poin Utama 1</strong></td>
+      <td>Penjelasan konsep dan ilustrasi penerapan praktis...</td>
+    </tr>
+    <tr>
+      <td><strong>Poin Utama 2</strong></td>
+      <td>Penjelasan konsep kedua beserta studi kasus mandiri...</td>
+    </tr>
+  </tbody>
+</table>
+<p><br></p>`;
+        break;
+
+      case 'full-template':
+        templateHtml = `
+<h3>Pengenalan Konsep &amp; Modul Ajar</h3>
+<div class="lms-box-info">
+  <strong>🎯 Tujuan Pembelajaran:</strong>
+  <p>1. Memahami konsep dasar dan kerangka teori pembelajaran.<br>2. Mampu menganalisis dan menyelesaikan latihan pemahaman dengan tepat.</p>
+</div>
+
+<h4>A. Pembahasan Materi Inti</h4>
+<p>Tuliskan uraian materi modul secara terstruktur, jelas, dan sistematis di sini untuk dipelajari peserta didik.</p>
+
+<div class="lms-box-tip">
+  💡 <strong>Tips Belajar:</strong>
+  <p>Fokuslah pada istilah kunci dan buatlah ringkasan mandiri setelah membaca uraian ini.</p>
+</div>
+
+<h4>B. Matriks Komparasi</h4>
+<table class="lms-table">
+  <thead>
+    <tr>
+      <th>Kategori</th>
+      <th>Keterangan Lengkap</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Komponen A</td>
+      <td>Uraian penjelasan detail komponen pertama...</td>
+    </tr>
+    <tr>
+      <td>Komponen B</td>
+      <td>Uraian penjelasan detail komponen kedua...</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="lms-box-warning">
+  ⚠️ <strong>Penting untuk Diperhatikan:</strong>
+  <p>Pastikan Anda telah menyimak seluruh bacaan dan video sebelum mengerjakan kuis pemahaman.</p>
+</div>
+<p><br></p>`;
+        break;
+    }
+
+    if (!templateHtml) return;
+
+    if (currentEditorMode === 'preview') {
+      switchEditorTab('visual');
+    }
+
+    if (currentEditorMode === 'html' && htmlEl) {
+      const start = htmlEl.selectionStart || htmlEl.value.length;
+      const end = htmlEl.selectionEnd || htmlEl.value.length;
+      htmlEl.value = htmlEl.value.substring(0, start) + templateHtml + htmlEl.value.substring(end);
+      if (visualEl) visualEl.innerHTML = htmlEl.value;
+    } else if (visualEl) {
+      visualEl.focus();
+      const success = document.execCommand('insertHTML', false, templateHtml);
+      if (!success) {
+        visualEl.innerHTML += templateHtml;
+      }
+      if (htmlEl) htmlEl.value = visualEl.innerHTML;
+    }
+
+    showToast('✨ Template kotak berhasil disisipkan!', 'success');
+  }
+
+  // --- Quiz Builder Functions ---
+  function renderQuizBuilderQuestions() {
+    const container = document.getElementById('quiz-questions-list');
+    if (!container) return;
+
+    if (!currentQuizData || currentQuizData.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center;padding:1.5rem;background:#ffffff;border:1px dashed var(--border);border-radius:8px;color:var(--tertiary);">
+          <p style="margin:0 0 0.5rem;">Belum ada butir soal kuis pada unit ini.</p>
+          <button type="button" class="btn btn-outline btn-sm" onclick="addNewQuizQuestion()">+ Tambah Soal Pertama</button>
+        </div>
+      `;
+      return;
+    }
+
+    const alphabet = ['A', 'B', 'C', 'D', 'E', 'F'];
+    container.innerHTML = currentQuizData.map((q, qIdx) => {
+      const optionsHtml = (q.options || []).map((opt, optIdx) => {
+        const isChecked = (q.answerIndex === optIdx);
+        return `
+          <div class="quiz-opt-row">
+            <input type="radio" name="quiz-ans-${qIdx}" class="quiz-opt-radio" ${isChecked ? 'checked' : ''} onchange="setQuizCorrectAnswer(${qIdx}, ${optIdx})" title="Pilih sebagai Kunci Jawaban Benar">
+            <span style="font-weight:700;color:${isChecked ? '#059669' : 'var(--tertiary)'};min-width:20px;">${alphabet[optIdx] || optIdx + 1}.</span>
+            <input type="text" class="form-control" style="font-size:0.875rem;padding:0.35rem 0.65rem;flex:1;${isChecked ? 'border-color:#10b981;background:#ecfdf5;' : ''}" value="${escHtml(opt || '')}" oninput="updateQuizOptionText(${qIdx}, ${optIdx}, this.value)" placeholder="Tuliskan pilihan jawaban ${alphabet[optIdx] || optIdx + 1}..." required>
+            ${(q.options.length > 2) ? `<button type="button" class="btn btn-ghost btn-sm" style="color:var(--error);padding:0.25rem 0.5rem;" onclick="removeOptionFromQuestion(${qIdx}, ${optIdx})" title="Hapus Pilihan">✕</button>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="quiz-q-card">
+          <div class="quiz-q-header">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <span class="badge" style="background:#e0e7ff;color:#3730a3;font-weight:700;">Soal #${qIdx + 1}</span>
+              <span style="font-size:0.75rem;color:var(--tertiary);">Pilihan dengan radio aktif (hijau) adalah kunci jawaban.</span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" style="color:var(--error);" onclick="deleteQuizQuestion(${qIdx})" title="Hapus Butir Soal Ini">
+              🗑️ Hapus Soal
+            </button>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            <textarea class="form-control" rows="2" style="font-size:0.9rem;" placeholder="Tuliskan teks pertanyaan soal di sini..." oninput="updateQuizQuestionText(${qIdx}, this.value)" required>${escHtml(q.question || '')}</textarea>
+          </div>
+
+          <div style="margin-bottom:0.75rem;">
+            <label style="font-size:0.78rem;font-weight:600;color:var(--tertiary);margin-bottom:0.35rem;display:block;">Opsi Pilihan Jawaban:</label>
+            ${optionsHtml}
+            ${(q.options.length < 6) ? `
+              <button type="button" class="btn btn-ghost btn-sm" style="font-size:0.75rem;color:var(--primary);margin-top:0.25rem;" onclick="addOptionToQuestion(${qIdx})">
+                + Tambah Opsi (${alphabet[q.options.length] || 'Opsi'})
+              </button>
+            ` : ''}
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.78rem;font-weight:600;color:var(--tertiary);display:block;margin-bottom:0.25rem;">Pembahasan / Penjelasan Jawaban (Muncul saat review):</label>
+            <textarea class="form-control" rows="1" style="font-size:0.8125rem;background:#f8fafc;" placeholder="Contoh: Jawaban ini benar karena sesuai dengan prinsip keseimbangan debit-kredit..." oninput="updateQuizExplanation(${qIdx}, this.value)">${escHtml(q.explanation || '')}</textarea>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function addNewQuizQuestion() {
+    if (!currentQuizData) currentQuizData = [];
+    currentQuizData.push({
+      id: currentQuizData.length + 1,
+      question: '',
+      options: ['', '', '', ''],
+      answerIndex: 0,
+      explanation: ''
+    });
+    renderQuizBuilderQuestions();
+    showToast('➕ Soal baru ditambahkan', 'info');
+  }
+
+  function deleteQuizQuestion(idx) {
+    if (confirm(`Hapus Butir Soal #${idx + 1}?`)) {
+      currentQuizData.splice(idx, 1);
+      renderQuizBuilderQuestions();
+    }
+  }
+
+  function updateQuizQuestionText(idx, val) {
+    if (currentQuizData[idx]) currentQuizData[idx].question = val;
+  }
+
+  function updateQuizOptionText(idx, optIdx, val) {
+    if (currentQuizData[idx] && currentQuizData[idx].options) {
+      currentQuizData[idx].options[optIdx] = val;
+    }
+  }
+
+  function setQuizCorrectAnswer(idx, optIdx) {
+    if (currentQuizData[idx]) {
+      currentQuizData[idx].answerIndex = optIdx;
+      renderQuizBuilderQuestions();
+    }
+  }
+
+  function updateQuizExplanation(idx, val) {
+    if (currentQuizData[idx]) currentQuizData[idx].explanation = val;
+  }
+
+  function addOptionToQuestion(idx) {
+    if (currentQuizData[idx]) {
+      currentQuizData[idx].options.push('');
+      renderQuizBuilderQuestions();
+    }
+  }
+
+  function removeOptionFromQuestion(idx, optIdx) {
+    if (currentQuizData[idx] && currentQuizData[idx].options.length > 2) {
+      currentQuizData[idx].options.splice(optIdx, 1);
+      if (currentQuizData[idx].answerIndex >= currentQuizData[idx].options.length) {
+        currentQuizData[idx].answerIndex = 0;
+      }
+      renderQuizBuilderQuestions();
+    }
+  }
+
+  function toggleQuickImportBox() {
+    const el = document.getElementById('quiz-quick-import-drawer');
+    if (el) {
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+  }
+
+  function processQuickImportQuestions() {
+    const textarea = document.getElementById('quiz-quick-import-text');
+    if (!textarea || !textarea.value.trim()) {
+      showToast('⚠️ Silakan tempel teks soal terlebih dahulu.', 'warning');
+      return;
+    }
+
+    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
+    const parsedQuestions = [];
+    let currentQ = null;
+
+    lines.forEach(line => {
+      // Cek apakah baris memulai soal baru (misal: "1. Apa..." atau "2) Pertanyaan...")
+      const qMatch = line.match(/^(\d+)[\.\)]\s*(.*)/);
+      if (qMatch) {
+        if (currentQ && currentQ.question && currentQ.options.length >= 2) {
+          parsedQuestions.push(currentQ);
+        }
+        currentQ = {
+          id: parsedQuestions.length + 1,
+          question: qMatch[2] || '',
+          options: [],
+          answerIndex: 0,
+          explanation: ''
+        };
+        return;
+      }
+
+      // Cek opsi jawaban: "*A. Pilihan" atau "A. Pilihan" atau "*a) Pilihan"
+      const optMatch = line.match(/^(\*?)\s*([A-Fa-f])[\.\)]\s*(.*)/);
+      if (optMatch && currentQ) {
+        const isCorrect = optMatch[1] === '*';
+        const optText = optMatch[3] || '';
+        if (isCorrect) {
+          currentQ.answerIndex = currentQ.options.length;
+        }
+        currentQ.options.push(optText);
+        return;
+      }
+
+      // Cek penjelasan: "Penjelasan:" atau "Pembahasan:"
+      const expMatch = line.match(/^(Penjelasan|Pembahasan|Catatan):\s*(.*)/i);
+      if (expMatch && currentQ) {
+        currentQ.explanation = expMatch[2] || '';
+        return;
+      }
+
+      // Kalimat lanjutan dari pertanyaan jika belum ada opsi
+      if (currentQ && currentQ.options.length === 0) {
+        currentQ.question += ' ' + line;
+      }
+    });
+
+    if (currentQ && currentQ.question && currentQ.options.length >= 2) {
+      parsedQuestions.push(currentQ);
+    }
+
+    if (parsedQuestions.length === 0) {
+      showToast('⚠️ Format teks tidak dikenali. Gunakan format: 1. Soal lalu A. Opsi (* untuk kunci).', 'warning');
+      return;
+    }
+
+    // Gabungkan soal yang berhasil diimpor
+    if (!currentQuizData) currentQuizData = [];
+    // Bersihkan jika hanya ada soal starter kosong
+    if (currentQuizData.length === 1 && !currentQuizData[0].question.trim()) {
+      currentQuizData = [];
+    }
+    currentQuizData.push(...parsedQuestions);
+    renderQuizBuilderQuestions();
+    textarea.value = '';
+    toggleQuickImportBox();
+    showToast(`✅ Berhasil mengimpor ${parsedQuestions.length} butir soal!`, 'success');
   }
 
   function buildContentForm(courseId, unit = {}, editId = null) {
     const course = AppState.courses.find(c => c.id === courseId) || AppState.courses[0];
     
-    // Kumpulan opsi durasi yang lengkap (termasuk 2 - 90 menit)
+    // Kumpulan opsi durasi lengkap
     const defaultDurations = [
       '2 Menit', '3 Menit', '4 Menit', '5 Menit', '6 Menit', '7 Menit', '8 Menit',
       '10 Menit', '12 Menit', '15 Menit', '20 Menit', '25 Menit', '30 Menit', 
       '40 Menit', '45 Menit', '50 Menit', '60 Menit', '90 Menit'
     ];
     
-    // Jika unit memiliki durasi khusus yang belum ada di daftar, tambahkan di awal agar sinkron 100%
     const currentDuration = (unit.duration || '10 Menit').trim();
     if (currentDuration && !defaultDurations.some(d => d.toLowerCase() === currentDuration.toLowerCase())) {
       defaultDurations.unshift(currentDuration);
@@ -2519,7 +3002,7 @@
       return `<option value="${d}" ${isSelected ? 'selected' : ''}>${d}</option>`;
     }).join('');
 
-    // Jenis konten lengkap sesuai arsitektur modul berjenjang
+    // Jenis konten lengkap
     const typeList = [
       { val: 'materi', label: '📖 Materi (Teks / Modul Bacaan)' },
       { val: 'video', label: '🎥 Video Pembelajaran (MP4 / YouTube)' },
@@ -2536,36 +3019,36 @@
       return `<option value="${t.val}" ${isSelected ? 'selected' : ''}>${t.label}</option>`;
     }).join('');
 
-    // Kumpulkan daftar Bab / Section yang sudah ada di course ini sebagai saran datalist
     const existingSections = [...new Set((course?.contents || []).map(c => c.sectionName).filter(Boolean))];
     const datalistHtml = existingSections.map(s => `<option value="${escHtml(s)}"></option>`).join('');
 
+    const initialContentBody = unit.contentBody || '';
+
     return `
       <form id="form-add-unit" onsubmit="handleSaveContent(event,'${courseId}','${editId || ''}')">
-        <div class="form-group">
-          <label class="form-label">Judul Unit</label>
-          <input type="text" id="unit-title" class="form-control" value="${escHtml(unit.title || '')}" placeholder="Contoh: Pengenalan Siklus Akuntansi" required dir="auto">
+        <!-- 1. Metadata Pokok Unit -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Judul Unit <span style="color:var(--error);">*</span></label>
+            <input type="text" id="unit-title" class="form-control" value="${escHtml(unit.title || '')}" placeholder="Contoh: Pengenalan Siklus Akuntansi" required dir="auto">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Bab / Lingkup Materi (Accordion Pembungkus)</label>
+            <input type="text" id="unit-section" list="section-suggestions" class="form-control" value="${escHtml(unit.sectionName || '')}" placeholder="Contoh: Akuntansi Dasar (Kosongkan jika Pre-Exam / Standalone)" dir="auto">
+            <datalist id="section-suggestions">
+              ${datalistHtml}
+            </datalist>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Bab / Lingkup Materi (Accordion Pembungkus)</label>
-          <input type="text" id="unit-section" list="section-suggestions" class="form-control" value="${escHtml(unit.sectionName || '')}" placeholder="Contoh: Akuntansi Dasar (Kosongkan jika Pre-Exam / Standalone)" dir="auto">
-          <datalist id="section-suggestions">
-            ${datalistHtml}
-          </datalist>
-          <small style="color:var(--tertiary);display:block;margin-top:0.25rem;">
-            💡 Materi dengan nama Bab yang sama akan otomatis digabung ke dalam satu Accordion di Sidebar.
-          </small>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-          <div class="form-group">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+          <div class="form-group" style="margin-bottom:0;">
             <label class="form-label">Jenis Konten</label>
-            <select id="unit-type" class="form-control">
+            <select id="unit-type" class="form-control" onchange="toggleContentEditorFields(this.value)">
               ${typeOptionsHtml}
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin-bottom:0;">
             <label class="form-label">Estimasi Durasi Belajar</label>
             <select id="unit-duration" class="form-control">
               ${durationOptionsHtml}
@@ -2573,17 +3056,153 @@
           </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" id="group-unit-url">
           <label class="form-label">URL Video Langsung / Supabase Storage / YouTube</label>
           <input type="url" id="unit-url" class="form-control" value="${unit.embedUrl || ''}" placeholder="https://...supabase.co/storage/.../video.mp4 atau https://youtube.com/...">
           <small style="color:var(--tertiary);display:block;margin-top:0.25rem;">
-            💡 <strong>Rekomendasi Video:</strong> Gunakan URL file MP4 langsung (Supabase Storage) untuk mengaktifkan <em>Penguncian Kecepatan Normal (1.0x)</em> &amp; proteksi anti-skip.
+            💡 <strong>Rekomendasi:</strong> Gunakan URL file MP4 langsung (Supabase Storage) untuk <em>Penguncian Kecepatan Normal (1.0x)</em> &amp; proteksi anti-skip.
           </small>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Isi Teks / Panduan Belajar / Narasi Modul</label>
-          <textarea id="unit-body" class="form-control" rows="6" placeholder="Ketikkan teks materi, soal latihan, atau petunjuk studi kasus..." dir="auto">${unit.contentBody || ''}</textarea>
+        <!-- 2. Interactive Quiz & Exam Builder (Muncul otomatis saat jenis konten adalah Kuis/Exam) -->
+        <div id="section-quiz-builder" class="quiz-builder-section" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.85rem;flex-wrap:wrap;gap:0.5rem;">
+            <div>
+              <h4 style="margin:0;font-size:1rem;color:var(--primary);display:flex;align-items:center;gap:0.35rem;">
+                <span>🎯</span> Penyusun Kuis Interaktif &amp; Soal Ujian
+              </h4>
+              <p style="margin:0.2rem 0 0;font-size:0.75rem;color:var(--tertiary);">
+                Susun butir pertanyaan, tentukan kunci jawaban benar (lingkaran radio hijau), dan atur ambang kelulusan.
+              </p>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.65rem;">
+              <div style="display:flex;align-items:center;gap:0.35rem;font-size:0.8125rem;">
+                <label for="quiz-passing-score" style="font-weight:600;">Passing Score:</label>
+                <input type="number" id="quiz-passing-score" class="form-control" min="10" max="100" style="width:70px;padding:0.25rem 0.5rem;height:32px;" value="${unit.passingScore || 70}">
+                <span>%</span>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" onclick="toggleQuickImportBox()">
+                📋 Impor dari Teks
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addNewQuizQuestion()">
+                + Tambah Soal
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Import Drawer -->
+          <div id="quiz-quick-import-drawer" style="display:none;background:#ffffff;border:1px dashed #3b82f6;border-radius:8px;padding:1rem;margin-bottom:1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+              <strong style="font-size:0.875rem;color:#1d4ed8;">📋 Format Impor Soal Cepat dari Teks / Dokumen Word</strong>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="toggleQuickImportBox()">✕ Tutup</button>
+            </div>
+            <p style="font-size:0.75rem;color:var(--tertiary);margin-bottom:0.5rem;">
+              Tempel teks soal dengan format nomor dan opsi A/B/C/D. Beri tanda bintang (<strong>*</strong>) di depan pilihan yang merupakan kunci jawaban.
+            </p>
+            <textarea id="quiz-quick-import-text" class="form-control" rows="5" style="font-family:var(--font-mono);font-size:0.8125rem;" placeholder="1. Apa fungsi utama neraca saldo dalam akuntansi?
+*A. Memastikan keseimbangan total nilai debit dan kredit
+B. Menghitung besaran pajak penghasilan tahunan
+C. Membayar gaji karyawan operasional
+D. Mengganti bukti transaksi fisik yang hilang
+Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total kredit."></textarea>
+            <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.5rem;">
+              <button type="button" class="btn btn-primary btn-sm" onclick="processQuickImportQuestions()">
+                🚀 Terapkan ke Daftar Soal
+              </button>
+            </div>
+          </div>
+
+          <!-- Daftar Kartu Soal -->
+          <div id="quiz-questions-list"></div>
+        </div>
+
+        <!-- 3. WYSIWYG Visual Editor & Callout Box Authoring -->
+        <div class="form-group" style="margin-bottom:0.5rem;">
+          <div class="editor-tabs-bar">
+            <div style="display:flex;align-items:center;gap:0.4rem;">
+              <button type="button" class="editor-tab-pill active" id="tab-btn-visual" onclick="switchEditorTab('visual')">
+                ✍️ Editor Visual (WYSIWYG)
+              </button>
+              <button type="button" class="editor-tab-pill" id="tab-btn-html" onclick="switchEditorTab('html')">
+                💻 Mode Kode HTML
+              </button>
+              <button type="button" class="editor-tab-pill" id="tab-btn-preview" onclick="switchEditorTab('preview')">
+                👁️ Pratinjau Tampilan Siswa
+              </button>
+            </div>
+            <div style="font-size:0.75rem;color:var(--tertiary);">
+              💡 Bebas dari repot coding HTML
+            </div>
+          </div>
+
+          <!-- 1-Click Callout Templates Bar -->
+          <div class="editor-presets-bar" id="editor-presets-container">
+            <span style="font-size:0.75rem;font-weight:600;color:var(--tertiary);margin-right:0.25rem;">Sisip Cepat:</span>
+            <button type="button" class="preset-chip chip-info" onclick="insertCalloutTemplate('info')" title="Kotak Tujuan Pembelajaran (Hijau/Toska)">
+              🎯 + Tujuan Bab
+            </button>
+            <button type="button" class="preset-chip chip-tip" onclick="insertCalloutTemplate('tip')" title="Kotak Tips Belajar (Biru)">
+              💡 + Tips Belajar
+            </button>
+            <button type="button" class="preset-chip chip-warning" onclick="insertCalloutTemplate('warning')" title="Kotak Peringatan / Hal Kritis (Kuning)">
+              ⚠️ + Peringatan
+            </button>
+            <button type="button" class="preset-chip chip-arabic" onclick="insertCalloutTemplate('arabic')" title="Kotak Teks Arab / Hadits &amp; Terjemahan">
+              🕌 + Teks Arab
+            </button>
+            <button type="button" class="preset-chip chip-table" onclick="insertCalloutTemplate('table')" title="Tabel Terformat Rapi">
+              📊 + Tabel 2x2
+            </button>
+            <button type="button" class="preset-chip chip-template" onclick="insertCalloutTemplate('full-template')" title="Kerangka Lengkap Modul Siap Pakai">
+              🧩 + Format Modul Lengkap
+            </button>
+          </div>
+
+          <!-- Visual Formatting Toolbar -->
+          <div class="editor-toolbar" id="visual-toolbar">
+            <div class="editor-btn-group">
+              <button type="button" class="editor-btn" onclick="execEditorCmd('formatBlock', '<h3>')" title="Judul Bab (H3)">H3</button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('formatBlock', '<h4>')" title="Sub-Judul (H4)">H4</button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('formatBlock', '<p>')" title="Paragraf Normal">¶</button>
+            </div>
+
+            <div class="editor-btn-group">
+              <button type="button" class="editor-btn" onclick="execEditorCmd('bold')" title="Tebal (Ctrl+B)"><strong>B</strong></button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('italic')" title="Miring (Ctrl+I)"><em>I</em></button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('underline')" title="Garis Bawah (Ctrl+U)"><u>U</u></button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('strikeThrough')" title="Coret"><s>S</s></button>
+            </div>
+
+            <div class="editor-btn-group">
+              <button type="button" class="editor-btn" onclick="execEditorCmd('insertUnorderedList')" title="Daftar Titik (Bullet List)">• List</button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('insertOrderedList')" title="Daftar Nomor (Numbered List)">1. List</button>
+            </div>
+
+            <div class="editor-btn-group">
+              <button type="button" class="editor-btn" onclick="execEditorCmd('justifyLeft')" title="Rata Kiri">⬅️</button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('justifyCenter')" title="Rata Tengah">↔️</button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('justifyRight')" title="Rata Kanan">➡️</button>
+            </div>
+
+            <div class="editor-btn-group">
+              <button type="button" class="editor-btn" onclick="promptInsertLink()" title="Sisipkan Link Web">🔗 Link</button>
+              <button type="button" class="editor-btn" onclick="promptInsertImage()" title="Sisipkan Gambar (URL)">🖼️ Gambar</button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('insertHorizontalRule')" title="Garis Pembatas">― Garis</button>
+              <button type="button" class="editor-btn" onclick="execEditorCmd('removeFormat')" title="Bersihkan Format" style="color:var(--error);">✕ Bersihkan</button>
+            </div>
+          </div>
+
+          <!-- Content Editable (Visual Area) -->
+          <div id="unit-body-visual" class="editor-content-area" contenteditable="true" spellcheck="false" dir="auto">
+            ${initialContentBody || '<p>Ketikkan isi teks materi atau klik tombol template di atas...</p>'}
+          </div>
+
+          <!-- Raw HTML Area (Hidden by default) -->
+          <textarea id="unit-body" class="form-control" rows="12" style="display:none;font-family:var(--font-mono);font-size:0.875rem;line-height:1.6;background:#fcfcfd;" dir="auto">${escHtml(initialContentBody)}</textarea>
+
+          <!-- Live Student Preview Area (Hidden by default) -->
+          <div id="unit-body-preview" class="player-content-body" style="display:none;background:#ffffff;padding:1.5rem;border:1px solid var(--border);border-radius:0 0 8px 8px;max-height:420px;overflow-y:auto;">
+          </div>
         </div>
       </form>
     `;
@@ -2595,8 +3214,49 @@
     const type = document.getElementById('unit-type').value;
     const duration = document.getElementById('unit-duration').value;
     const sectionName = document.getElementById('unit-section') ? document.getElementById('unit-section').value.trim() : '';
-    const embedUrl = document.getElementById('unit-url').value.trim();
-    const contentBody = document.getElementById('unit-body').value;
+    const embedUrl = document.getElementById('unit-url') ? document.getElementById('unit-url').value.trim() : '';
+
+    // Ambil isi materi teks dari tab yang sedang aktif
+    const visualEl = document.getElementById('unit-body-visual');
+    const htmlEl = document.getElementById('unit-body');
+    let contentBody = '';
+
+    if (currentEditorMode === 'html' && htmlEl) {
+      contentBody = htmlEl.value;
+    } else if (visualEl) {
+      contentBody = visualEl.innerHTML;
+    } else if (htmlEl) {
+      contentBody = htmlEl.value;
+    }
+
+    // Bersihkan placeholder bawaan jika belum diubah sama sekali
+    if (contentBody.trim() === '<p>Ketikkan isi teks materi atau klik tombol template di atas...</p>') {
+      contentBody = '';
+    }
+
+    // Ambil data kuis jika jenis konten merupakan kuis/ujian
+    const isQuiz = ['kuis_popup', 'pre_exam', 'post_exam', 'evaluasi', 'kuis'].includes(type.toLowerCase());
+    let quizData = null;
+    let passingScore = 70;
+
+    const passingScoreEl = document.getElementById('quiz-passing-score');
+    if (passingScoreEl) {
+      passingScore = parseInt(passingScoreEl.value, 10) || 70;
+    }
+
+    if (isQuiz && currentQuizData && currentQuizData.length > 0) {
+      // Filter hanya soal yang memiliki pertanyaan terisi
+      const validQuestions = currentQuizData.filter(q => q.question && q.question.trim().length > 0);
+      if (validQuestions.length > 0) {
+        quizData = validQuestions.map((q, idx) => ({
+          id: idx + 1,
+          question: q.question.trim(),
+          options: (q.options || []).map(opt => (opt || '').trim()),
+          answerIndex: typeof q.answerIndex === 'number' ? q.answerIndex : 0,
+          explanation: (q.explanation || '').trim()
+        }));
+      }
+    }
 
     const course = AppState.courses.find(c => c.id === courseId) || AppState.courses[0];
     setModalLoading(true, 'Menyimpan...');
@@ -2605,8 +3265,8 @@
       const sb = getSupabase();
       if (sb && !AppState.isDemoMode) {
         if (editId && editId !== 'null' && editId !== '') {
-          // Edit existing
-          await dbEditContent(editId, { title, type, duration, embedUrl, contentBody, sectionName });
+          // Edit existing unit di Supabase
+          await dbEditContent(editId, { title, type, duration, embedUrl, contentBody, sectionName, quizData, passingScore });
           const unit = course.contents.find(u => u.id === editId);
           if (unit) {
             unit.title = title;
@@ -2615,12 +3275,14 @@
             unit.sectionName = sectionName;
             unit.embedUrl = embedUrl;
             unit.contentBody = contentBody;
+            unit.quizData = quizData;
+            unit.passingScore = passingScore;
           }
-          showToast('✅ Unit berhasil diperbarui!', 'success');
+          showToast('✅ Unit berhasil diperbarui di database!', 'success');
         } else {
-          // Add new
+          // Add new unit ke Supabase
           const orderIndex = course.contents.length + 1;
-          const data = await dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, sectionName, orderIndex });
+          const data = await dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, sectionName, orderIndex, quizData, passingScore });
           course.contents.push({
             id: data.id,
             title,
@@ -2629,12 +3291,14 @@
             sectionName,
             embedUrl,
             contentBody,
+            quizData,
+            passingScore,
             completed: false
           });
           showToast('✅ Unit baru tersimpan ke Supabase!', 'success');
         }
       } else {
-        // Demo mode
+        // Demo mode (LocalStorage / In-memory)
         if (editId && editId !== '') {
           const unit = course.contents.find(u => u.id === editId);
           if (unit) {
@@ -2644,6 +3308,8 @@
             unit.sectionName = sectionName;
             unit.embedUrl = embedUrl;
             unit.contentBody = contentBody;
+            unit.quizData = quizData;
+            unit.passingScore = passingScore;
           }
         } else {
           course.contents.push({
@@ -2654,6 +3320,8 @@
             sectionName,
             embedUrl,
             contentBody,
+            quizData,
+            passingScore,
             completed: false
           });
         }
@@ -3164,7 +3832,12 @@
   }
 
   function closeModal() {
-    document.getElementById('global-modal').classList.remove('active');
+    const modal = document.getElementById('global-modal');
+    if (modal) {
+      modal.classList.remove('active');
+      const box = modal.querySelector('.modal-box');
+      if (box) box.classList.remove('modal-lg');
+    }
   }
 
   function setModalLoading(loading, defaultText) {
