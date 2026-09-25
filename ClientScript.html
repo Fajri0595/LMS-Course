@@ -578,31 +578,35 @@
     if (error) throw error;
   }
 
-  async function dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, orderIndex }) {
+  async function dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, sectionName, orderIndex }) {
     const sb = getSupabase();
     if (!sb) throw new Error('Supabase tidak tersedia');
     const { data, error } = await sb.from('course_contents').insert([{
       course_id: courseId,
       title,
       type,
-      duration: duration || '15 Menit',
+      duration: duration || '10 Menit',
       embed_url: embedUrl || null,
       content_body: contentBody || '',
+      section_name: sectionName || '',
       order_index: orderIndex || 1
     }]).select().single();
     if (error) throw error;
     return data;
   }
 
-  async function dbEditContent(contentId, { title, type, duration, embedUrl, contentBody }) {
+  async function dbEditContent(contentId, { title, type, duration, embedUrl, contentBody, sectionName }) {
     const sb = getSupabase();
     if (!sb) throw new Error('Supabase tidak tersedia');
-    const { error } = await sb.from('course_contents').update({
-      title, type,
-      duration: duration || '15 Menit',
+    const updatePayload = {
+      title,
+      type,
+      duration: duration || '10 Menit',
       embed_url: embedUrl || null,
       content_body: contentBody || ''
-    }).eq('id', contentId);
+    };
+    if (sectionName !== undefined) updatePayload.section_name = sectionName;
+    const { error } = await sb.from('course_contents').update(updatePayload).eq('id', contentId);
     if (error) throw error;
   }
 
@@ -1071,13 +1075,16 @@
     }
 
     const unitsList = (course.contents || []).map((u, idx) => `
-      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:.75rem;">
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;">
+        <div style="display:flex;align-items:center;gap:.75rem;flex:1;min-width:240px;">
           <span style="color:var(--tertiary);font-weight:bold;min-width:24px;">${idx + 1}.</span>
-          <span class="badge badge-${u.type.toLowerCase()}">${u.type}</span>
+          <span class="badge badge-${(u.type || 'materi').toLowerCase()}">${u.type}</span>
           <div>
-            <strong style="font-size:.9375rem;color:var(--primary);">${escHtml(u.title)}</strong>
-            <div style="font-size:.75rem;color:var(--tertiary);">Estimasi: ${u.duration}</div>
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+              <strong style="font-size:.9375rem;color:var(--primary);">${escHtml(u.title)}</strong>
+              ${u.sectionName ? `<span class="badge" style="background:#f1f5f9;color:#475569;font-size:0.72rem;font-weight:600;">📁 ${escHtml(u.sectionName)}</span>` : ''}
+            </div>
+            <div style="font-size:.75rem;color:var(--tertiary);margin-top:0.2rem;">⏱️ Estimasi: ${escHtml(u.duration || '10 Menit')}</div>
           </div>
         </div>
         <div style="display:flex;gap:.5rem;">
@@ -2492,24 +2499,80 @@
   }
 
   function buildContentForm(courseId, unit = {}, editId = null) {
+    const course = AppState.courses.find(c => c.id === courseId) || AppState.courses[0];
+    
+    // Kumpulan opsi durasi yang lengkap (termasuk 2 - 90 menit)
+    const defaultDurations = [
+      '2 Menit', '3 Menit', '4 Menit', '5 Menit', '6 Menit', '7 Menit', '8 Menit',
+      '10 Menit', '12 Menit', '15 Menit', '20 Menit', '25 Menit', '30 Menit', 
+      '40 Menit', '45 Menit', '50 Menit', '60 Menit', '90 Menit'
+    ];
+    
+    // Jika unit memiliki durasi khusus yang belum ada di daftar, tambahkan di awal agar sinkron 100%
+    const currentDuration = (unit.duration || '10 Menit').trim();
+    if (currentDuration && !defaultDurations.some(d => d.toLowerCase() === currentDuration.toLowerCase())) {
+      defaultDurations.unshift(currentDuration);
+    }
+
+    const durationOptionsHtml = defaultDurations.map(d => {
+      const isSelected = d.toLowerCase() === currentDuration.toLowerCase();
+      return `<option value="${d}" ${isSelected ? 'selected' : ''}>${d}</option>`;
+    }).join('');
+
+    // Jenis konten lengkap sesuai arsitektur modul berjenjang
+    const typeList = [
+      { val: 'materi', label: '📖 Materi (Teks / Modul Bacaan)' },
+      { val: 'video', label: '🎥 Video Pembelajaran (MP4 / YouTube)' },
+      { val: 'kuis_popup', label: '📋 Kuis Pop-Up / Latihan Pemahaman' },
+      { val: 'pre_exam', label: '📑 Pre-Exam (Ujian Awal Pra-Pembelajaran)' },
+      { val: 'post_exam', label: '📑 Post-Exam (Ujian Akhir Kelulusan)' },
+      { val: 'tugas', label: '✏️ Praktik / Unjuk Keterampilan' },
+      { val: 'refleksi', label: '📓 Reflective Journal' },
+      { val: 'evaluasi', label: '📋 Evaluasi Pembelajaran' }
+    ];
+    const currentType = (unit.type || 'materi').toLowerCase();
+    const typeOptionsHtml = typeList.map(t => {
+      const isSelected = currentType === t.val || currentType === t.val.replace('_', ' ');
+      return `<option value="${t.val}" ${isSelected ? 'selected' : ''}>${t.label}</option>`;
+    }).join('');
+
+    // Kumpulkan daftar Bab / Section yang sudah ada di course ini sebagai saran datalist
+    const existingSections = [...new Set((course?.contents || []).map(c => c.sectionName).filter(Boolean))];
+    const datalistHtml = existingSections.map(s => `<option value="${escHtml(s)}"></option>`).join('');
+
     return `
       <form id="form-add-unit" onsubmit="handleSaveContent(event,'${courseId}','${editId || ''}')">
         <div class="form-group">
           <label class="form-label">Judul Unit</label>
-          <input type="text" id="unit-title" class="form-control" value="${escHtml(unit.title || '')}" placeholder="Contoh: Video Percobaan Kalorimeter" required>
+          <input type="text" id="unit-title" class="form-control" value="${escHtml(unit.title || '')}" placeholder="Contoh: Pengenalan Siklus Akuntansi" required dir="auto">
         </div>
+
         <div class="form-group">
-          <label class="form-label">Jenis Konten</label>
-          <select id="unit-type" class="form-control">
-            ${['Materi','Video','Kaidah','Latihan','Kuis'].map(t => `<option value="${t}" ${unit.type===t?'selected':''}>${t}</option>`).join('')}
-          </select>
+          <label class="form-label">Bab / Lingkup Materi (Accordion Pembungkus)</label>
+          <input type="text" id="unit-section" list="section-suggestions" class="form-control" value="${escHtml(unit.sectionName || '')}" placeholder="Contoh: Akuntansi Dasar (Kosongkan jika Pre-Exam / Standalone)" dir="auto">
+          <datalist id="section-suggestions">
+            ${datalistHtml}
+          </datalist>
+          <small style="color:var(--tertiary);display:block;margin-top:0.25rem;">
+            💡 Materi dengan nama Bab yang sama akan otomatis digabung ke dalam satu Accordion di Sidebar.
+          </small>
         </div>
-        <div class="form-group">
-          <label class="form-label">Estimasi Durasi</label>
-          <select id="unit-duration" class="form-control">
-            ${['10 Menit','15 Menit','20 Menit','25 Menit','30 Menit','45 Menit','60 Menit'].map(d => `<option value="${d}" ${unit.duration===d?'selected':''}>${d}</option>`).join('')}
-          </select>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div class="form-group">
+            <label class="form-label">Jenis Konten</label>
+            <select id="unit-type" class="form-control">
+              ${typeOptionsHtml}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estimasi Durasi Belajar</label>
+            <select id="unit-duration" class="form-control">
+              ${durationOptionsHtml}
+            </select>
+          </div>
         </div>
+
         <div class="form-group">
           <label class="form-label">URL Video Langsung / Supabase Storage / YouTube</label>
           <input type="url" id="unit-url" class="form-control" value="${unit.embedUrl || ''}" placeholder="https://...supabase.co/storage/.../video.mp4 atau https://youtube.com/...">
@@ -2517,9 +2580,10 @@
             💡 <strong>Rekomendasi Video:</strong> Gunakan URL file MP4 langsung (Supabase Storage) untuk mengaktifkan <em>Penguncian Kecepatan Normal (1.0x)</em> &amp; proteksi anti-skip.
           </small>
         </div>
+
         <div class="form-group">
-          <label class="form-label">Isi Teks / Panduan Belajar</label>
-          <textarea id="unit-body" class="form-control" rows="5" placeholder="Ketikkan teks materi, soal latihan, atau instruksi...">${unit.contentBody || ''}</textarea>
+          <label class="form-label">Isi Teks / Panduan Belajar / Narasi Modul</label>
+          <textarea id="unit-body" class="form-control" rows="6" placeholder="Ketikkan teks materi, soal latihan, atau petunjuk studi kasus..." dir="auto">${unit.contentBody || ''}</textarea>
         </div>
       </form>
     `;
@@ -2530,6 +2594,7 @@
     const title = document.getElementById('unit-title').value.trim();
     const type = document.getElementById('unit-type').value;
     const duration = document.getElementById('unit-duration').value;
+    const sectionName = document.getElementById('unit-section') ? document.getElementById('unit-section').value.trim() : '';
     const embedUrl = document.getElementById('unit-url').value.trim();
     const contentBody = document.getElementById('unit-body').value;
 
@@ -2541,24 +2606,56 @@
       if (sb && !AppState.isDemoMode) {
         if (editId && editId !== 'null' && editId !== '') {
           // Edit existing
-          await dbEditContent(editId, { title, type, duration, embedUrl, contentBody });
+          await dbEditContent(editId, { title, type, duration, embedUrl, contentBody, sectionName });
           const unit = course.contents.find(u => u.id === editId);
-          if (unit) { unit.title = title; unit.type = type; unit.duration = duration; unit.embedUrl = embedUrl; unit.contentBody = contentBody; }
+          if (unit) {
+            unit.title = title;
+            unit.type = type;
+            unit.duration = duration;
+            unit.sectionName = sectionName;
+            unit.embedUrl = embedUrl;
+            unit.contentBody = contentBody;
+          }
           showToast('✅ Unit berhasil diperbarui!', 'success');
         } else {
           // Add new
           const orderIndex = course.contents.length + 1;
-          const data = await dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, orderIndex });
-          course.contents.push({ id: data.id, title, type, duration, embedUrl, contentBody, completed: false });
+          const data = await dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, sectionName, orderIndex });
+          course.contents.push({
+            id: data.id,
+            title,
+            type,
+            duration,
+            sectionName,
+            embedUrl,
+            contentBody,
+            completed: false
+          });
           showToast('✅ Unit baru tersimpan ke Supabase!', 'success');
         }
       } else {
         // Demo mode
         if (editId && editId !== '') {
           const unit = course.contents.find(u => u.id === editId);
-          if (unit) { unit.title = title; unit.type = type; unit.duration = duration; unit.embedUrl = embedUrl; unit.contentBody = contentBody; }
+          if (unit) {
+            unit.title = title;
+            unit.type = type;
+            unit.duration = duration;
+            unit.sectionName = sectionName;
+            unit.embedUrl = embedUrl;
+            unit.contentBody = contentBody;
+          }
         } else {
-          course.contents.push({ id: 'DEMO-' + Date.now(), title, type, duration, embedUrl, contentBody, completed: false });
+          course.contents.push({
+            id: 'DEMO-' + Date.now(),
+            title,
+            type,
+            duration,
+            sectionName,
+            embedUrl,
+            contentBody,
+            completed: false
+          });
         }
         showToast('✅ Unit disimpan (mode demo).', 'success');
       }
