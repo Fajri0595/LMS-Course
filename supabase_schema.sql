@@ -31,21 +31,38 @@ CREATE TABLE IF NOT EXISTS public.courses (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 4. Course Contents Table (Unit Materi, Video, Kaidah, Latihan, Kuis)
-CREATE TABLE IF NOT EXISTS public.course_contents (
+-- 4. Course Modules Table (Bab / Kelompok Materi Pembelajaran)
+CREATE TABLE IF NOT EXISTS public.course_modules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   course_id UUID REFERENCES public.courses(id) ON DELETE CASCADE NOT NULL,
   title TEXT NOT NULL,
-  type TEXT CHECK (type IN ('Materi', 'Video', 'Kaidah', 'Latihan', 'Kuis')) DEFAULT 'Materi',
-  duration TEXT DEFAULT '15 Menit',
+  description TEXT,
+  order_index INT DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 5. Course Contents Table (Unit Sub-Materi, Video, Kuis Pop-Up, Pre-Exam, Post-Exam)
+CREATE TABLE IF NOT EXISTS public.course_contents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id UUID REFERENCES public.courses(id) ON DELETE CASCADE NOT NULL,
+  module_id UUID REFERENCES public.course_modules(id) ON DELETE CASCADE,
+  section_name TEXT,
+  title TEXT NOT NULL,
+  type TEXT CHECK (type IN (
+    'pre_exam', 'materi', 'video', 'kuis_popup', 'evaluasi', 'post_exam', 'tugas', 'refleksi', 'sertifikat',
+    'Materi', 'Video', 'Kaidah', 'Latihan', 'Kuis'
+  )) DEFAULT 'materi',
+  duration TEXT DEFAULT '5 Menit',
   order_index INT DEFAULT 1,
   embed_url TEXT,
   drive_file_id TEXT,
   content_body TEXT,
+  quiz_data JSONB,
+  passing_score INT DEFAULT 70,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 5. Enrollments Table (Hubungan Peserta Didik ke Course)
+-- 6. Enrollments Table (Hubungan Peserta Didik ke Course)
 CREATE TABLE IF NOT EXISTS public.enrollments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   course_id UUID REFERENCES public.courses(id) ON DELETE CASCADE NOT NULL,
@@ -54,7 +71,7 @@ CREATE TABLE IF NOT EXISTS public.enrollments (
   UNIQUE(course_id, student_id)
 );
 
--- 6. Progress Table (Pencatatan Status Belajar & Nilai Unit)
+-- 7. Progress Table (Pencatatan Status Belajar & Nilai Unit/Kuis)
 CREATE TABLE IF NOT EXISTS public.progress (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   course_id UUID REFERENCES public.courses(id) ON DELETE CASCADE NOT NULL,
@@ -62,6 +79,11 @@ CREATE TABLE IF NOT EXISTS public.progress (
   student_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   status TEXT DEFAULT 'Selesai',
   score INT DEFAULT 100,
+  correct_answers INT DEFAULT 0,
+  wrong_answers INT DEFAULT 0,
+  time_spent_seconds INT DEFAULT 0,
+  answers_data JSONB,
+  notes TEXT,
   completed_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   UNIQUE(student_id, content_id)
 );
@@ -72,6 +94,7 @@ CREATE TABLE IF NOT EXISTS public.progress (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.course_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.course_contents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.progress ENABLE ROW LEVEL SECURITY;
@@ -86,6 +109,11 @@ CREATE POLICY "Public Read Courses" ON public.courses FOR SELECT USING (true);
 CREATE POLICY "Public Insert Courses" ON public.courses FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Courses" ON public.courses FOR UPDATE USING (true);
 CREATE POLICY "Public Delete Courses" ON public.courses FOR DELETE USING (true);
+
+CREATE POLICY "Public Read Modules" ON public.course_modules FOR SELECT USING (true);
+CREATE POLICY "Public Insert Modules" ON public.course_modules FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Modules" ON public.course_modules FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Modules" ON public.course_modules FOR DELETE USING (true);
 
 CREATE POLICY "Public Read Contents" ON public.course_contents FOR SELECT USING (true);
 CREATE POLICY "Public Insert Contents" ON public.course_contents FOR INSERT WITH CHECK (true);
