@@ -93,24 +93,24 @@
             </div>
           </div>
 
-          <!-- Tab Switcher: Mahasiswa vs Dosen -->
+          <!-- Tab Switcher: Peserta Didik vs Tutor -->
           <div class="auth-tabs">
-            <button type="button" class="auth-tab-btn active" id="tab-btn-mahasiswa" onclick="switchLoginRole('mahasiswa')">
-              <span style="margin-right:.375rem;">🎓</span> Mahasiswa
+            <button type="button" class="auth-tab-btn active" id="tab-btn-peserta" onclick="switchLoginRole('peserta')">
+              <span style="margin-right:.375rem;">🎓</span> Peserta Didik
             </button>
-            <button type="button" class="auth-tab-btn" id="tab-btn-dosen" onclick="switchLoginRole('dosen')">
-              <span style="margin-right:.375rem;">👨‍🏫</span> Dosen
+            <button type="button" class="auth-tab-btn" id="tab-btn-tutor" onclick="switchLoginRole('tutor')">
+              <span style="margin-right:.375rem;">👨‍🏫</span> Tutor
             </button>
           </div>
 
           <div id="login-error" class="login-error" style="display:none;"></div>
           <div id="login-success" class="login-success" style="display:none;"></div>
 
-          <!-- FORM LOGIN (Mahasiswa & Dosen — dibedakan secara visual) -->
+          <!-- FORM LOGIN (Peserta Didik & Tutor — dibedakan secara visual) -->
           <form id="form-login" onsubmit="handleLogin(event)">
             <div class="form-group">
-              <label class="form-label" id="login-email-label">Email Mahasiswa</label>
-              <input type="email" id="login-email" class="form-control" placeholder="contoh: nama@mahasiswa.ac.id" required autocomplete="email">
+              <label class="form-label" id="login-email-label">Email Peserta Didik</label>
+              <input type="email" id="login-email" class="form-control" placeholder="contoh: nama@peserta.sch.id" required autocomplete="email">
             </div>
             <div class="form-group">
               <label class="form-label">Password</label>
@@ -121,10 +121,10 @@
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
               <span id="login-btn-icon" style="margin-right:.375rem;">🎓</span>
-              <span id="login-btn-text">Masuk sebagai Mahasiswa</span>
+              <span id="login-btn-text">Masuk sebagai Peserta Didik</span>
             </button>
             <p id="login-hint-text" style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
-              Akun mahasiswa didaftarkan oleh dosen pengampu masing-masing kelas.
+              Akun peserta didik didaftarkan oleh tutor pengampu masing-masing kelas.
             </p>
           </form>
 
@@ -135,9 +135,9 @@
   }
 
   function switchLoginRole(role) {
-    const isMahasiswa = role === 'mahasiswa';
-    const tabMhs = document.getElementById('tab-btn-mahasiswa');
-    const tabDosen = document.getElementById('tab-btn-dosen');
+    const isPeserta = role === 'peserta' || role === 'mahasiswa';
+    const tabPeserta = document.getElementById('tab-btn-peserta') || document.getElementById('tab-btn-mahasiswa');
+    const tabTutor = document.getElementById('tab-btn-tutor') || document.getElementById('tab-btn-dosen');
     const errEl = document.getElementById('login-error');
     const succEl = document.getElementById('login-success');
     const emailLabel = document.getElementById('login-email-label');
@@ -149,22 +149,22 @@
     if (errEl) errEl.style.display = 'none';
     if (succEl) succEl.style.display = 'none';
 
-    if (isMahasiswa) {
-      if (tabMhs) tabMhs.classList.add('active');
-      if (tabDosen) tabDosen.classList.remove('active');
-      if (emailLabel) emailLabel.textContent = 'Email Mahasiswa';
-      if (emailInput) emailInput.placeholder = 'contoh: nama@mahasiswa.ac.id';
+    if (isPeserta) {
+      if (tabPeserta) tabPeserta.classList.add('active');
+      if (tabTutor) tabTutor.classList.remove('active');
+      if (emailLabel) emailLabel.textContent = 'Email Peserta Didik';
+      if (emailInput) emailInput.placeholder = 'contoh: nama@peserta.sch.id';
       if (btnIcon) btnIcon.textContent = '🎓';
-      if (btnText) btnText.textContent = 'Masuk sebagai Mahasiswa';
-      if (hintText) hintText.textContent = 'Akun mahasiswa didaftarkan oleh dosen pengampu masing-masing kelas.';
+      if (btnText) btnText.textContent = 'Masuk sebagai Peserta Didik';
+      if (hintText) hintText.textContent = 'Akun peserta didik didaftarkan oleh tutor pengampu masing-masing kelas.';
     } else {
-      if (tabMhs) tabMhs.classList.remove('active');
-      if (tabDosen) tabDosen.classList.add('active');
-      if (emailLabel) emailLabel.textContent = 'Email Dosen';
-      if (emailInput) emailInput.placeholder = 'contoh: nama@dosen.ac.id';
+      if (tabPeserta) tabPeserta.classList.remove('active');
+      if (tabTutor) tabTutor.classList.add('active');
+      if (emailLabel) emailLabel.textContent = 'Email Tutor';
+      if (emailInput) emailInput.placeholder = 'contoh: tutor@institusi.sch.id';
       if (btnIcon) btnIcon.textContent = '👨‍🏫';
-      if (btnText) btnText.textContent = 'Masuk sebagai Dosen';
-      if (hintText) hintText.textContent = 'Gunakan email dan password yang sudah terdaftar di sistem.';
+      if (btnText) btnText.textContent = 'Masuk sebagai Tutor';
+      if (hintText) hintText.textContent = 'Gunakan email dan password tutor yang sudah terdaftar di sistem.';
     }
   }
 
@@ -276,7 +276,7 @@
 
     const roleConfigs = {
       admin:    { label: 'Administrator', class: 'role-admin' },
-      educator: { label: 'Pendidik / Guru', class: 'role-educator' },
+      educator: { label: 'Tutor', class: 'role-educator' },
       student:  { label: 'Peserta Didik', class: 'role-student' }
     };
 
@@ -296,7 +296,7 @@
     const initials = AppState.user.name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
     document.getElementById('user-avatar-text').textContent = initials;
     document.getElementById('user-display-name').textContent = AppState.user.name;
-    const roleLabels = { admin: 'Super Administrator', educator: 'Pendidik / Guru Pengampu', student: 'Peserta Didik' };
+    const roleLabels = { admin: 'Super Administrator', educator: 'Tutor Pengampu', student: 'Peserta Didik' };
     document.getElementById('user-display-role').textContent = roleLabels[role] || role;
 
     // Update role badge di pojok kanan atas
@@ -664,7 +664,7 @@
     const initials = AppState.user.name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
     document.getElementById('user-avatar-text').textContent = initials;
     document.getElementById('user-display-name').textContent = AppState.user.name;
-    const roleLabels = { admin: 'Super Administrator', educator: 'Pendidik / Guru Pengampu', student: 'Peserta Didik' };
+    const roleLabels = { admin: 'Super Administrator', educator: 'Tutor Pengampu', student: 'Peserta Didik' };
     document.getElementById('user-display-role').textContent = roleLabels[role];
 
     showLoadingState();
