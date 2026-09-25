@@ -49,7 +49,8 @@
     if (!sb) {
       // Supabase tidak terkonfigurasi — langsung demo mode
       console.warn('⚠️ Supabase tidak terkonfigurasi. Berjalan dalam mode demo.');
-      enterDemoMode('educator');
+      const savedDemo = localStorage.getItem('lms_demo_role') || 'student';
+      enterDemoMode(savedDemo);
       return;
     }
 
@@ -67,7 +68,12 @@
     if (session) {
       await handleSessionStart(session.user);
     } else {
-      renderLoginPage();
+      const savedDemoRole = localStorage.getItem('lms_demo_role');
+      if (savedDemoRole && AppState.demoProfiles[savedDemoRole]) {
+        enterDemoMode(savedDemoRole);
+      } else {
+        renderLoginPage();
+      }
     }
   });
 
@@ -241,6 +247,7 @@
   }
 
   async function enterDemoMode(role) {
+    try { localStorage.setItem('lms_demo_role', role); } catch (e) {}
     AppState.isDemoMode = true;
     AppState.user = { ...AppState.demoProfiles[role] };
     hideLoginPage();
@@ -264,6 +271,11 @@
   }
 
   async function handleLogout() {
+    try {
+      localStorage.removeItem('lms_last_active_route');
+      localStorage.removeItem('lms_last_active_player');
+      localStorage.removeItem('lms_demo_role');
+    } catch (e) {}
     const sb = typeof getSupabase === 'function' ? getSupabase() : null;
     if (sb && !AppState.isDemoMode) {
       await sb.auth.signOut();
@@ -317,10 +329,38 @@
     showLoadingState();
     await loadInitialData();
 
-    // Navigasi ke dashboard sesuai role
-    if (role === 'admin') navigateTo('admin-dashboard');
-    else if (role === 'educator') navigateTo('educator-dashboard');
-    else navigateTo('student-dashboard');
+    // Cek apakah ada rute aktif yang disimpan sebelumnya di localStorage
+    let restored = false;
+    try {
+      const savedRouteRaw = localStorage.getItem('lms_last_active_route');
+      if (savedRouteRaw) {
+        const savedRoute = JSON.parse(savedRouteRaw);
+        if (savedRoute && savedRoute.viewId) {
+          if (savedRoute.viewId === 'course-player') {
+            const targetCourseId = savedRoute.param || AppState.courses[0]?.id;
+            const course = AppState.courses.find(c => c.id === targetCourseId) || AppState.courses[0];
+            if (course) {
+              const savedUnit = typeof savedRoute.unitIndex === 'number' ? savedRoute.unitIndex : 0;
+              AppState.activeUnitIndex = Math.min(Math.max(0, savedUnit), Math.max(0, (course.contents || []).length - 1));
+              navigateTo('course-player', course.id);
+              restored = true;
+            }
+          } else {
+            navigateTo(savedRoute.viewId, savedRoute.param);
+            restored = true;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Gagal memulihkan rute terakhir:', e);
+    }
+
+    if (!restored) {
+      // Navigasi default ke dashboard sesuai role
+      if (role === 'admin') navigateTo('admin-dashboard');
+      else if (role === 'educator') navigateTo('educator-dashboard');
+      else navigateTo('student-dashboard');
+    }
   }
 
   function showLoadingState() {
@@ -634,6 +674,15 @@
    * ========================================================= */
   function navigateTo(viewId, param = null) {
     AppState.currentView = viewId;
+    try {
+      localStorage.setItem('lms_last_active_route', JSON.stringify({
+        viewId,
+        param,
+        role: AppState.currentRole,
+        unitIndex: AppState.activeUnitIndex
+      }));
+    } catch (e) {}
+
     document.querySelectorAll('.nav-item').forEach(el => {
       el.classList.toggle('active', el.getAttribute('data-view') === viewId);
     });
@@ -1168,6 +1217,20 @@
     AppState.activeCoursePlayer = course;
     if (AppState.activeUnitIndex >= course.contents.length) AppState.activeUnitIndex = 0;
 
+    // Simpan posisi player aktif ke localStorage agar persisten saat tab ditutup/reload
+    try {
+      localStorage.setItem('lms_last_active_route', JSON.stringify({
+        viewId: 'course-player',
+        param: course.id,
+        role: AppState.currentRole,
+        unitIndex: AppState.activeUnitIndex
+      }));
+      localStorage.setItem('lms_last_active_player', JSON.stringify({
+        courseId: course.id,
+        unitIndex: AppState.activeUnitIndex
+      }));
+    } catch (e) {}
+
     const currentUnit = course.contents[AppState.activeUnitIndex];
     if (!currentUnit) {
       container.innerHTML = '<div style="padding:3rem;text-align:center;"><p>Unit konten belum tersedia. <button class="btn btn-outline" onclick="navigateTo(\'course-editor\',\''+courseId+'\')">Tambah Konten ↗</button></p></div>';
@@ -1218,14 +1281,14 @@
       const u = course.contents[preExamIdx];
       const isLocked = isUnitLocked(preExamIdx, course);
       const isActive = preExamIdx === AppState.activeUnitIndex;
-      const statusIcon = u.completed ? '✓' : (isLocked ? '🔒' : '');
-      const statusClass = u.completed ? 'completed' : (isLocked ? 'locked' : '');
+      const statusIcon = u.completed ? '✓' : (isLocked ? '🔒' : (isActive ? '●' : ''));
+      const statusClass = u.completed ? 'completed' : (isLocked ? 'locked' : (isActive ? 'active-unit' : ''));
       
       preExamHtml = `
         <div class="player-standalone-card ${isActive ? 'active' : ''} ${statusClass}"
              onclick="selectPlayerUnit(${preExamIdx})"
              title="${isLocked ? 'Terkunci. Selesaikan sesi sebelumnya.' : escHtml(u.title)}">
-          <div class="player-status-circle ${statusClass}">
+          <div class="player-status-circle ${statusClass}" style="flex-shrink:0;">
             ${statusIcon}
           </div>
           <div style="flex:1;">
@@ -1252,29 +1315,33 @@
       } else if (firstLocked) {
         chStatusIcon = '🔒';
         chStatusClass = 'locked';
+      } else if (hasActive) {
+        chStatusIcon = '●';
+        chStatusClass = 'active-unit';
       }
 
       const subItemsHtml = subItems.map(({ unit: u, idx }) => {
         const isLocked = isUnitLocked(idx, course);
         const isActive = idx === AppState.activeUnitIndex;
-        let icon = '⚙';
+        let icon = '📖';
         const typeLower = (u.type || '').toLowerCase();
         if (typeLower === 'video') icon = '▶';
         else if (typeLower === 'kuis_popup' || typeLower === 'kuis' || u.title.toLowerCase().includes('kuis')) icon = '📋';
+        else if (typeLower === 'tugas') icon = '✏️';
 
-        const subStatusIcon = u.completed ? '✓' : (isLocked ? '🔒' : '');
-        const subStatusClass = u.completed ? 'completed' : (isLocked ? 'locked' : '');
+        const subStatusIcon = u.completed ? '✓' : (isLocked ? '🔒' : (isActive ? '●' : ''));
+        const subStatusClass = u.completed ? 'completed' : (isLocked ? 'locked' : (isActive ? 'active-unit' : 'uncompleted'));
 
         return `
           <div class="player-subitem ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}"
                onclick="selectPlayerUnit(${idx})"
                title="${isLocked ? 'Sesi ini terkunci' : escHtml(u.title)}">
-            <div class="player-status-circle ${subStatusClass}" style="width:18px;height:18px;font-size:0.65rem;">
+            <div class="player-status-circle ${subStatusClass}" style="width:20px;height:20px;font-size:0.65rem;flex-shrink:0;">
               ${subStatusIcon}
             </div>
             <div style="flex:1;min-width:0;">
               <div class="player-subitem-title">${icon} ${escHtml(u.title)}</div>
-              <div class="player-subitem-meta">${escHtml(u.duration || '5 Menit')}</div>
+              <div class="player-subitem-meta">⏱️ ${escHtml(u.duration || '5 Menit')}</div>
             </div>
           </div>
         `;
@@ -1283,11 +1350,11 @@
       return `
         <div class="player-chapter-card ${isExpanded ? 'expanded' : ''} ${hasActive ? 'chapter-active' : ''}">
           <div class="player-chapter-header" onclick="toggleChapterAccordion('${escHtml(chTitle)}')">
-            <div class="player-status-circle ${chStatusClass}">
+            <div class="player-status-circle ${chStatusClass}" style="flex-shrink:0;">
               ${chStatusIcon}
             </div>
             <div class="player-chapter-title">${escHtml(chTitle)}</div>
-            <div class="player-chapter-chevron">▼</div>
+            <div class="player-chapter-chevron" style="transform:${isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'};transition:transform 0.25s ease;">▼</div>
           </div>
           <div class="player-chapter-body">
             ${subItemsHtml}
@@ -1967,6 +2034,19 @@
     const chName = currentUnit?.sectionName || (currentUnit?.moduleId && course.modules?.find(m => m.id === currentUnit.moduleId)?.title);
     if (chName) AppState.expandedChapters[chName] = true;
 
+    try {
+      localStorage.setItem('lms_last_active_route', JSON.stringify({
+        viewId: 'course-player',
+        param: course.id,
+        role: AppState.currentRole,
+        unitIndex: idx
+      }));
+      localStorage.setItem('lms_last_active_player', JSON.stringify({
+        courseId: course.id,
+        unitIndex: idx
+      }));
+    } catch (e) {}
+
     renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
   }
 
@@ -1983,6 +2063,20 @@
       const nextUnit = course.contents[nextIdx];
       const chName = nextUnit?.sectionName || (nextUnit?.moduleId && course.modules?.find(m => m.id === nextUnit.moduleId)?.title);
       if (chName) AppState.expandedChapters[chName] = true;
+
+      try {
+        localStorage.setItem('lms_last_active_route', JSON.stringify({
+          viewId: 'course-player',
+          param: course.id,
+          role: AppState.currentRole,
+          unitIndex: nextIdx
+        }));
+        localStorage.setItem('lms_last_active_player', JSON.stringify({
+          courseId: course.id,
+          unitIndex: nextIdx
+        }));
+      } catch (e) {}
+
       renderCoursePlayer(document.getElementById('view-container'), course.id);
     }
   }
@@ -1993,6 +2087,20 @@
       const prevUnit = AppState.activeCoursePlayer?.contents[AppState.activeUnitIndex];
       const chName = prevUnit?.sectionName || (prevUnit?.moduleId && AppState.activeCoursePlayer?.modules?.find(m => m.id === prevUnit.moduleId)?.title);
       if (chName) AppState.expandedChapters[chName] = true;
+
+      try {
+        localStorage.setItem('lms_last_active_route', JSON.stringify({
+          viewId: 'course-player',
+          param: AppState.activeCoursePlayer?.id,
+          role: AppState.currentRole,
+          unitIndex: AppState.activeUnitIndex
+        }));
+        localStorage.setItem('lms_last_active_player', JSON.stringify({
+          courseId: AppState.activeCoursePlayer?.id,
+          unitIndex: AppState.activeUnitIndex
+        }));
+      } catch (e) {}
+
       renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
     }
   }
