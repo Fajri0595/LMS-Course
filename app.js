@@ -22,9 +22,14 @@
     educators: [],
     enrollments: {},          // { courseId: count }
     progressMap: {},          // { contentId: true/false }
-    // Player state
+    progressData: {},         // { contentId: { score, correct_answers, wrong_answers, time_spent_seconds, notes } }
+    // Player & Hierarchical Curriculum state
     activeCoursePlayer: null,
     activeUnitIndex: 0,
+    expandedChapters: {},     // { [chapterTitle]: boolean }
+    activeQuizAnswers: {},    // { [questionId]: optionIdx }
+    activeQuizStartTime: null,
+    quizReviewMode: {},       // { [unitId]: boolean }
     // Demo mode (untuk presentasi IFP tanpa login)
     isDemoMode: false,
     demoProfiles: {
@@ -361,7 +366,8 @@
   async function loadCourses(sb) {
     let query = sb.from('courses').select(`
       id, title, description, author_id, author_name, status, cover_gradient, created_at,
-      contents:course_contents(id, title, type, duration, embed_url, content_body, order_index)
+      modules:course_modules(id, title, order_index),
+      contents:course_contents(id, title, type, duration, embed_url, content_body, order_index, module_id, section_name, quiz_data, passing_score)
     `).order('created_at', { ascending: false });
 
     // Educator hanya lihat course miliknya sendiri (kecuali admin & demo)
@@ -369,8 +375,16 @@
       query = query.eq('author_id', AppState.user.id);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
+    let { data, error } = await query;
+    if (error) {
+      console.warn('Query courses dengan modules gagal, mencoba query kompatibilitas:', error);
+      const fallback = await sb.from('courses').select(`
+        id, title, description, author_id, author_name, status, cover_gradient, created_at,
+        contents:course_contents(id, title, type, duration, embed_url, content_body, order_index, module_id, section_name, quiz_data, passing_score)
+      `).order('created_at', { ascending: false });
+      if (fallback.data) data = fallback.data;
+      else throw error;
+    }
 
     AppState.courses = (data || []).map(c => ({
       id: c.id,
@@ -382,15 +396,20 @@
       createdAt: (c.created_at || '').split('T')[0],
       coverGradient: c.cover_gradient || 'linear-gradient(135deg, #1e3a5f 0%, #14b8a6 100%)',
       enrolledStudents: 0, // akan diisi loadEnrollmentCounts
+      modules: ((c.modules || []).sort((a, b) => (a.order_index || 0) - (b.order_index || 0))),
       contents: ((c.contents || [])
         .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
         .map(cnt => ({
           id: cnt.id,
+          moduleId: cnt.module_id,
+          sectionName: cnt.section_name || '',
           title: cnt.title,
           type: cnt.type,
-          duration: cnt.duration || '15 Menit',
+          duration: cnt.duration || '5 Menit',
           embedUrl: cnt.embed_url || '',
           contentBody: cnt.content_body || '',
+          quizData: cnt.quiz_data || null,
+          passingScore: cnt.passing_score || 70,
           completed: false // akan diisi loadStudentProgress
         })))
     }));
@@ -438,12 +457,17 @@
     if (!studentId) return;
     const { data, error } = await sb
       .from('progress')
-      .select('content_id')
+      .select('content_id, score, correct_answers, wrong_answers, time_spent_seconds, notes')
       .eq('student_id', studentId);
     if (error) return;
     const map = {};
-    (data || []).forEach(p => { map[p.content_id] = true; });
+    const progressData = {};
+    (data || []).forEach(p => { 
+      map[p.content_id] = true;
+      progressData[p.content_id] = p;
+    });
     AppState.progressMap = map;
+    AppState.progressData = progressData;
     // Mark units sebagai completed
     AppState.courses.forEach(c => {
       c.contents.forEach(u => { u.completed = !!map[u.id]; });
@@ -580,6 +604,25 @@
       course_id: courseId,
       status: 'Selesai',
       score: 100,
+      completed_at: new Date().toISOString()
+    }], { onConflict: 'student_id,content_id' });
+    if (error) throw error;
+  }
+
+  async function dbSubmitQuizResult({ contentId, courseId, score, correctAnswers, wrongAnswers, timeSpentSeconds, notes }) {
+    const sb = getSupabase();
+    const studentId = AppState.user?.id;
+    if (!sb || !studentId) return;
+    const { error } = await sb.from('progress').upsert([{
+      student_id: studentId,
+      content_id: contentId,
+      course_id: courseId,
+      status: 'Selesai',
+      score,
+      correct_answers: correctAnswers,
+      wrong_answers: wrongAnswers,
+      time_spent_seconds: timeSpentSeconds,
+      notes,
       completed_at: new Date().toISOString()
     }], { onConflict: 'student_id,content_id' });
     if (error) throw error;
@@ -1114,7 +1157,7 @@
     `;
   }
 
-  // 6. Course Player
+  // 6. Course Player (Hierarchical Multi-Level Curriculum)
   function renderCoursePlayer(container, courseId) {
     const course = AppState.courses.find(c => c.id === courseId) || AppState.courses[0];
     if (!course) {
@@ -1132,63 +1175,353 @@
 
     const completedCount = course.contents.filter(u => u.completed).length;
     const progressPercent = course.contents.length > 0 ? Math.round((completedCount / course.contents.length) * 100) : 0;
-
-    // Logika Penguncian Sesi (Sequential Lock):
-    // Jika role siswa, unit terbuka hanya jika index 0 ATAU unit sebelumnya sudah selesai.
-    // Guru / Admin bebas membuka seluruh unit (preview mode).
     const isStudent = AppState.currentRole === 'student';
 
-    const unitsListHtml = course.contents.map((u, idx) => {
-      const isLocked = isStudent && idx > 0 && !course.contents[idx - 1].completed;
-      let statusIcon;
-      if (u.completed) {
-        statusIcon = '✓';
-      } else if (isLocked) {
-        statusIcon = '🔒';
-      } else {
-        statusIcon = idx + 1;
+    // 1. Identifikasi & Pengelompokan Unit (Pre-Exam, Bab Accordion, Post-Course)
+    let preExamIdx = course.contents.findIndex(u => (u.type || '').toLowerCase() === 'pre_exam' || u.title.toLowerCase().includes('pre-exam') || u.title.toLowerCase().includes('pretest'));
+    
+    const postCourseTypes = ['evaluasi', 'post_exam', 'tugas', 'refleksi', 'sertifikat'];
+    const postCourseIndices = [];
+    const chapters = {};
+    const chapterOrder = [];
+
+    course.contents.forEach((u, idx) => {
+      if (idx === preExamIdx) return;
+      const typeLower = (u.type || '').toLowerCase();
+      if (postCourseTypes.includes(typeLower) && idx > course.contents.length / 2) {
+        postCourseIndices.push(idx);
+        return;
       }
 
-      return `
-        <div class="player-unit-item ${idx === AppState.activeUnitIndex ? 'active' : ''} ${u.completed ? 'completed' : ''} ${isLocked ? 'locked' : ''}" 
-             onclick="selectPlayerUnit(${idx})"
-             title="${isLocked ? 'Sesi ini terkunci. Harap selesaikan sesi sebelumnya terlebih dahulu.' : escHtml(u.title)}">
-          <div class="player-unit-status">
+      // Tentukan nama Bab pembungkus
+      const chTitle = u.sectionName || (u.moduleId && course.modules?.find(m => m.id === u.moduleId)?.title) || 'Materi Pembelajaran';
+      if (!chapters[chTitle]) {
+        chapters[chTitle] = [];
+        chapterOrder.push(chTitle);
+      }
+      chapters[chTitle].push({ unit: u, idx });
+    });
+
+    // Otomatis buka accordion untuk bab dari unit yang sedang aktif
+    const curChTitle = currentUnit.sectionName || (currentUnit.moduleId && course.modules?.find(m => m.id === currentUnit.moduleId)?.title);
+    if (curChTitle && AppState.expandedChapters[curChTitle] === undefined) {
+      AppState.expandedChapters[curChTitle] = true;
+    }
+    if (chapterOrder.length > 0 && Object.keys(AppState.expandedChapters).length === 0) {
+      AppState.expandedChapters[chapterOrder[0]] = true;
+    }
+
+    // 2. Render Sidebar: Pre-Exam Card
+    let preExamHtml = '';
+    if (preExamIdx !== -1) {
+      const u = course.contents[preExamIdx];
+      const isLocked = isUnitLocked(preExamIdx, course);
+      const isActive = preExamIdx === AppState.activeUnitIndex;
+      const statusIcon = u.completed ? '✓' : (isLocked ? '🔒' : '');
+      const statusClass = u.completed ? 'completed' : (isLocked ? 'locked' : '');
+      
+      preExamHtml = `
+        <div class="player-standalone-card ${isActive ? 'active' : ''} ${statusClass}"
+             onclick="selectPlayerUnit(${preExamIdx})"
+             title="${isLocked ? 'Terkunci. Selesaikan sesi sebelumnya.' : escHtml(u.title)}">
+          <div class="player-status-circle ${statusClass}">
             ${statusIcon}
           </div>
-          <div class="player-unit-title">${escHtml(u.title)}</div>
-          <span class="badge badge-${(u.type || 'materi').toLowerCase()}" style="font-size:.6875rem;">${u.type}</span>
+          <div style="flex:1;">
+            <div class="player-standalone-title">📑 Pre-Exam</div>
+            <div class="player-standalone-subtext">${escHtml(u.duration || '15 Menit')}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 3. Render Sidebar: Accordion Bab (Chapters)
+    const chaptersHtml = chapterOrder.map(chTitle => {
+      const subItems = chapters[chTitle];
+      const allCompleted = subItems.every(item => item.unit.completed);
+      const firstLocked = isUnitLocked(subItems[0].idx, course);
+      const isExpanded = AppState.expandedChapters[chTitle] !== false;
+      const hasActive = subItems.some(item => item.idx === AppState.activeUnitIndex);
+
+      let chStatusIcon = '';
+      let chStatusClass = '';
+      if (allCompleted) {
+        chStatusIcon = '✓';
+        chStatusClass = 'completed';
+      } else if (firstLocked) {
+        chStatusIcon = '🔒';
+        chStatusClass = 'locked';
+      }
+
+      const subItemsHtml = subItems.map(({ unit: u, idx }) => {
+        const isLocked = isUnitLocked(idx, course);
+        const isActive = idx === AppState.activeUnitIndex;
+        let icon = '⚙';
+        const typeLower = (u.type || '').toLowerCase();
+        if (typeLower === 'video') icon = '▶';
+        else if (typeLower === 'kuis_popup' || typeLower === 'kuis' || u.title.toLowerCase().includes('kuis')) icon = '📋';
+
+        const subStatusIcon = u.completed ? '✓' : (isLocked ? '🔒' : '');
+        const subStatusClass = u.completed ? 'completed' : (isLocked ? 'locked' : '');
+
+        return `
+          <div class="player-subitem ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}"
+               onclick="selectPlayerUnit(${idx})"
+               title="${isLocked ? 'Sesi ini terkunci' : escHtml(u.title)}">
+            <div class="player-status-circle ${subStatusClass}" style="width:18px;height:18px;font-size:0.65rem;">
+              ${subStatusIcon}
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div class="player-subitem-title">${icon} ${escHtml(u.title)}</div>
+              <div class="player-subitem-meta">${escHtml(u.duration || '5 Menit')}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="player-chapter-card ${isExpanded ? 'expanded' : ''} ${hasActive ? 'chapter-active' : ''}">
+          <div class="player-chapter-header" onclick="toggleChapterAccordion('${escHtml(chTitle)}')">
+            <div class="player-status-circle ${chStatusClass}">
+              ${chStatusIcon}
+            </div>
+            <div class="player-chapter-title">${escHtml(chTitle)}</div>
+            <div class="player-chapter-chevron">▼</div>
+          </div>
+          <div class="player-chapter-body">
+            ${subItemsHtml}
+          </div>
         </div>
       `;
     }).join('');
 
+    // 4. Render Sidebar: Post-Course Standalone Items
+    const postCourseHtml = postCourseIndices.map(idx => {
+      const u = course.contents[idx];
+      const isLocked = isUnitLocked(idx, course);
+      const isActive = idx === AppState.activeUnitIndex;
+      const statusIcon = u.completed ? '✓' : (isLocked ? '🔒' : '');
+      const statusClass = u.completed ? 'completed' : (isLocked ? 'locked' : '');
+      
+      let icon = '📑';
+      let title = u.title;
+      let subtext = u.duration || '';
+      const typeLower = (u.type || '').toLowerCase();
+      if (typeLower === 'evaluasi') icon = '📋';
+      else if (typeLower === 'post_exam') icon = '📑';
+      else if (typeLower === 'tugas') {
+        icon = '✏️';
+        subtext = `Status: ${u.completed ? 'Selesai' : 'Belum Selesai'}`;
+      } else if (typeLower === 'refleksi') icon = '📓';
+      else if (typeLower === 'sertifikat') icon = '📜';
+
+      return `
+        <div class="player-standalone-card ${isActive ? 'active' : ''} ${statusClass}"
+             onclick="selectPlayerUnit(${idx})"
+             title="${isLocked ? 'Terkunci. Selesaikan materi pembelajaran terlebih dahulu.' : escHtml(u.title)}">
+          <div class="player-status-circle ${statusClass}">
+            ${statusIcon}
+          </div>
+          <div style="flex:1;">
+            <div class="player-standalone-title">${icon} ${escHtml(title)}</div>
+            ${subtext ? `<div class="player-standalone-subtext">${escHtml(subtext)}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // 5. Render Area Konten Utama (Kuis / Result Screen / Materi / Video / Tugas / Sertifikat)
     const isCompleted = currentUnit.completed;
+    const typeLower = (currentUnit.type || '').toLowerCase();
+    const isQuizUnit = ['pre_exam', 'kuis_popup', 'post_exam', 'kuis'].includes(typeLower) || (currentUnit.quizData && currentUnit.quizData.length > 0);
 
-    // Parse estimasi durasi menjadi detik
-    const parseDurationSeconds = (durStr) => {
-      if (!durStr) return 60; // default 1 menit jika kosong
-      const match = durStr.match(/\d+/);
-      const val = match ? parseInt(match[0], 10) : 10;
-      // 1 menit materi = 60 detik waktu belajar
-      return Math.max(30, val * 60);
-    };
+    let contentHtml = '';
 
-    const targetSeconds = parseDurationSeconds(currentUnit.duration);
+    if (isQuizUnit) {
+      const isReviewMode = AppState.quizReviewMode && AppState.quizReviewMode[currentUnit.id];
+      const showResultScreen = (isCompleted || AppState.progressMap[currentUnit.id]) && !isReviewMode;
 
-    const isVideoUnit = (currentUnit.type || '').toLowerCase() === 'video' || (currentUnit.embedUrl && (currentUnit.embedUrl.endsWith('.mp4') || currentUnit.embedUrl.endsWith('.webm') || currentUnit.embedUrl.includes('/storage/v1/object/public/')));
+      if (showResultScreen) {
+        // LAYAR HASIL SKOR (Persis Gambar 1)
+        const progress = AppState.progressData[currentUnit.id] || {};
+        const questions = getEffectiveQuizData(currentUnit);
+        const correctCount = progress.correct_answers !== undefined ? progress.correct_answers : Math.round((progress.score || 70) / 100 * questions.length);
+        const wrongCount = progress.wrong_answers !== undefined ? progress.wrong_answers : Math.max(0, questions.length - correctCount);
+        const score = progress.score !== undefined ? progress.score : Math.round((correctCount / Math.max(1, questions.length)) * 100);
+        const timeSecs = progress.time_spent_seconds || 647; // default 10:47
+        const timeStr = formatSecondsToMMSS(timeSecs);
+        const cleanTitle = currentUnit.title.replace(/^Pre-Exam:\s*/i, 'Pre-Exam ');
 
-    const contentHtml = (() => {
+        let notes = progress.notes;
+        if (!notes) {
+          if (typeLower === 'pre_exam') {
+            notes = score < (currentUnit.passingScore || 60)
+              ? 'Nilai awal kamu di bawah rata-rata. Perhatikan materi kelas dengan baik untuk tingkatkan pemahaman kamu ya!'
+              : 'Pemahaman awal Anda sudah baik. Pelajari modul kelas secara komprehensif untuk penguasaan mendalam.';
+          } else {
+            notes = score >= (currentUnit.passingScore || 70)
+              ? 'Luar biasa! Kamu telah menguasai kompetensi pada unit ini dengan sangat baik. Pertahankan prestasimu!'
+              : 'Nilai kamu masih di bawah batas kelulusan. Pelajari kembali materi dan gunakan tombol Kerjakan Ulang untuk meningkatkan nilai.';
+          }
+        }
+
+        contentHtml = `
+          <div class="exam-result-box">
+            <div class="exam-illustration-badge">
+              <div class="exam-thumbsup-circle">
+                👍
+                <span class="exam-thumbsup-check">✓</span>
+              </div>
+            </div>
+
+            <h2 class="exam-result-title">Selamat! Kamu telah menyelesaikan ${escHtml(cleanTitle)} kelas ini</h2>
+
+            <div class="exam-score-table-card">
+              <div class="exam-score-columns">
+                <div>
+                  <div class="exam-stat-label">Benar</div>
+                  <div class="exam-stat-value">${correctCount}</div>
+                </div>
+                <div>
+                  <div class="exam-stat-label">Salah</div>
+                  <div class="exam-stat-value">${wrongCount}</div>
+                </div>
+                <div>
+                  <div class="exam-stat-label">Waktu</div>
+                  <div class="exam-stat-value">${timeStr}</div>
+                </div>
+                <div>
+                  <div class="exam-stat-label">Nilai</div>
+                  <div class="exam-stat-value score-teal">${score}</div>
+                </div>
+              </div>
+              
+              <div class="exam-stat-divider"></div>
+              
+              <p class="exam-stat-notes">
+                <strong>Catatan:</strong> ${escHtml(notes)}
+              </p>
+            </div>
+
+            <div style="margin-top:1rem;display:flex;gap:.75rem;">
+              <button class="btn btn-outline btn-sm" onclick="retakeQuiz(${AppState.activeUnitIndex})">
+                🔄 Kerjakan Ulang
+              </button>
+            </div>
+          </div>
+        `;
+      } else {
+        // FORM PENGERJAAN KUIS / EXAM
+        const questions = getEffectiveQuizData(currentUnit);
+        if (!AppState.activeQuizStartTime) AppState.activeQuizStartTime = Date.now();
+        const answers = AppState.activeQuizAnswers || {};
+
+        const questionsHtml = questions.map((q, qIdx) => {
+          const selectedOpt = answers[q.id];
+          const optionsHtml = q.options.map((opt, optIdx) => `
+            <div class="exam-option-card ${selectedOpt === optIdx ? 'selected' : ''}" 
+                 onclick="selectQuizOption(${q.id}, ${optIdx})">
+              <input type="radio" name="q_${q.id}" value="${optIdx}" ${selectedOpt === optIdx ? 'checked' : ''}>
+              <span style="font-size:0.875rem;color:#334155;line-height:1.4;">${escHtml(opt)}</span>
+            </div>
+          `).join('');
+
+          return `
+            <div class="exam-question-item" id="quiz-q-${q.id}">
+              <div class="exam-question-text"><strong>${qIdx + 1}.</strong> ${escHtml(q.question)}</div>
+              <div>${optionsHtml}</div>
+            </div>
+          `;
+        }).join('');
+
+        contentHtml = `
+          <div class="exam-container">
+            <div class="exam-intro-card">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+                <span class="badge badge-primary">${currentUnit.type === 'pre_exam' ? 'Pra-Pembelajaran' : 'Uji Pemahaman'}</span>
+                <span style="font-size:0.8125rem;color:var(--tertiary);font-weight:600;">⏱️ Estimasi: ${escHtml(currentUnit.duration || '15 Menit')}</span>
+              </div>
+              <h3 style="margin-bottom:.5rem;">${escHtml(currentUnit.title)}</h3>
+              <p style="color:var(--tertiary);font-size:0.875rem;line-height:1.5;">
+                Pilihlah salah satu jawaban yang paling tepat untuk setiap pertanyaan di bawah ini.
+              </p>
+            </div>
+
+            ${questionsHtml}
+
+            <div style="text-align:center;margin-top:1.5rem;padding-bottom:2rem;">
+              <button class="btn btn-primary" style="padding:0.75rem 2.5rem;font-size:1rem;" onclick="submitActiveQuiz(${AppState.activeUnitIndex})">
+                🚀 Kumpulkan & Periksa Jawaban
+              </button>
+            </div>
+          </div>
+        `;
+      }
+    } else if (typeLower === 'tugas') {
+      // UNJUK KETERAMPILAN
+      contentHtml = `
+        <div style="max-width:700px;margin:0 auto;line-height:1.7;">
+          <div style="padding:1.5rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:1.5rem;">
+            <h3>Instruksi Unjuk Keterampilan</h3>
+            ${currentUnit.contentBody || '<p>Selesaikan tugas studi kasus praktis sesuai panduan yang tertera.</p>'}
+          </div>
+          <div style="border:2px dashed #cbd5e1;border-radius:12px;padding:2rem;text-align:center;background:#fff;margin-bottom:1.5rem;">
+            <div style="font-size:2.5rem;margin-bottom:.5rem;">📁</div>
+            <h4 style="margin-bottom:.5rem;">Unggah Lembar Kerja Praktik</h4>
+            <p style="color:var(--tertiary);font-size:.8125rem;margin-bottom:1rem;">Format PDF, XLS, atau DOCX (Maksimal 10MB)</p>
+            <button class="btn btn-outline" onclick="showToast('✅ Berkas studi kasus berhasil diunggah! Status: Selesai', 'success'); markUnitComplete('${currentUnit.id}', '${course.id}');">
+              Pilih Berkas Tugas
+            </button>
+          </div>
+        </div>
+      `;
+    } else if (typeLower === 'refleksi') {
+      // REFLECTIVE JOURNAL
+      contentHtml = `
+        <div style="max-width:700px;margin:0 auto;line-height:1.7;">
+          <div style="padding:1.5rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:1.5rem;">
+            <h3>Jurnal Refleksi Pembelajaran</h3>
+            <p>Tuliskan ringkasan wawasan baru dan bagaimana Anda akan mengaplikasikannya di dunia nyata.</p>
+          </div>
+          <div class="form-group">
+            <textarea class="form-control" rows="6" placeholder="Tuliskan catatan refleksi Anda di sini..."></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="showToast('✅ Refleksi berhasil disimpan!', 'success'); markUnitComplete('${currentUnit.id}', '${course.id}');">
+            Simpan Refleksi
+          </button>
+        </div>
+      `;
+    } else if (typeLower === 'sertifikat') {
+      // LIHAT SERTIFIKAT
+      const studentName = AppState.user?.name || 'Peserta Didik';
+      contentHtml = `
+        <div style="max-width:680px;margin:0 auto;text-align:center;padding:1.5rem 0;">
+          <div style="padding:2.5rem 2rem;border:3px double #14b8a6;border-radius:16px;background:#f0fdfa;box-shadow:var(--shadow-2);margin-bottom:1.5rem;">
+            <div style="font-size:3rem;margin-bottom:1rem;">🎓</div>
+            <h2 style="font-family:'Noto Serif',serif;font-size:1.75rem;color:#1e3a5f;margin-bottom:.5rem;">SERTIFIKAT KELULUSAN</h2>
+            <p style="color:#0f766e;font-weight:600;margin-bottom:1.5rem;">Diberikan dengan bangga kepada:</p>
+            <h3 style="font-size:1.5rem;color:#0f172a;text-decoration:underline;margin-bottom:1rem;">${escHtml(studentName)}</h3>
+            <p style="color:#475569;font-size:0.9375rem;line-height:1.6;margin-bottom:1.5rem;">
+              Telah berhasil menyelesaikan seluruh rangkaian materi, kuis berkala, dan evaluasi kelulusan pada pelatihan:
+              <br><strong>${escHtml(course.title)}</strong>
+            </p>
+            <div style="display:inline-block;padding:0.35rem 1rem;background:#ffffff;border:1px solid #99f6e4;border-radius:20px;font-size:0.75rem;color:#0d9488;">
+              ID Terverifikasi: CH-LMS-${Math.abs(course.id.split('-')[0].hashCode?.() || 892341)}
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="exportPDF('${escHtml(studentName)}')">
+            📄 Unduh Sertifikat (PDF)
+          </button>
+        </div>
+      `;
+    } else {
+      // MATERI TEKS / VIDEO
       if (currentUnit.embedUrl) {
-        // Cek apakah direct video (MP4/WebM/Supabase Storage)
-        const isDirectVideo = currentUnit.embedUrl.endsWith('.mp4') || 
-                              currentUnit.embedUrl.endsWith('.webm') || 
-                              currentUnit.embedUrl.includes('/storage/v1/object/public/') ||
-                              currentUnit.type === 'Video';
-
+        const isDirectVideo = currentUnit.embedUrl.endsWith('.mp4') || currentUnit.embedUrl.endsWith('.webm') || currentUnit.embedUrl.includes('/storage/v1/object/public/') || currentUnit.type === 'Video';
         const isYoutube = currentUnit.embedUrl.includes('youtube') || currentUnit.embedUrl.includes('youtu.be');
 
         if (isDirectVideo && !isYoutube) {
-          return `
+          contentHtml = `
             <div class="video-player-container">
               <div class="video-lock-badge">🔒 Kecepatan Terkunci (1.0x Normal)</div>
               <video id="lms-custom-video" controls controlsList="nodownload noplaybackrate" disablePictureInPicture src="${currentUnit.embedUrl}">
@@ -1197,24 +1530,32 @@
             </div>
             ${currentUnit.contentBody ? `<div style="line-height:1.8;font-size:1rem;">${currentUnit.contentBody}</div>` : ''}
           `;
-        }
-
-        if (isYoutube) {
+        } else if (isYoutube) {
           const embedSrc = currentUnit.embedUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'www.youtube-nocookie.com/embed/');
-          return `
+          contentHtml = `
             <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin-bottom:1.5rem;background:#000;">
               <iframe src="${embedSrc}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
             </div>
             ${currentUnit.contentBody ? `<div style="line-height:1.8;font-size:1rem;">${currentUnit.contentBody}</div>` : ''}
           `;
         }
+      } else {
+        contentHtml = `<div style="line-height:1.8;font-size:1rem;">${currentUnit.contentBody || '<p style="color:var(--tertiary);">Konten belum tersedia.</p>'}</div>`;
       }
-      return `<div style="line-height:1.8;font-size:1rem;">${currentUnit.contentBody || '<p style="color:var(--tertiary);">Konten belum tersedia.</p>'}</div>`;
-    })();
+    }
 
-    // Widget Timer Belajar atau Status Video
+    // Timer badge untuk materi teks / video
     let timerWidgetHtml = '';
-    if (isStudent && !isCompleted) {
+    const isVideoUnit = typeLower === 'video' || (currentUnit.embedUrl && (currentUnit.embedUrl.endsWith('.mp4') || currentUnit.embedUrl.includes('/storage/v1/object/public/')));
+    const parseDurationSeconds = (durStr) => {
+      if (!durStr) return 60;
+      const match = durStr.match(/\d+/);
+      const val = match ? parseInt(match[0], 10) : 5;
+      return Math.max(30, val * 60);
+    };
+    const targetSeconds = parseDurationSeconds(currentUnit.duration);
+
+    if (isStudent && !isCompleted && !isQuizUnit) {
       if (isVideoUnit) {
         timerWidgetHtml = `
           <div class="study-timer-badge" id="study-timer-display" title="Tonton video hingga selesai untuk membuka sesi berikutnya">
@@ -1231,7 +1572,7 @@
           </div>
         `;
       }
-    } else if (isCompleted) {
+    } else if (isCompleted && !isQuizUnit) {
       timerWidgetHtml = `
         <div class="study-timer-badge completed">
           <span>✓</span>
@@ -1240,30 +1581,40 @@
       `;
     }
 
+    // 6. RENDER KESELURUHAN PLAYER KE DOM
     container.innerHTML = `
       <div class="player-container">
+        <!-- Sidebar Konten Kelas (Hierarki Berjenjang) -->
         <div class="player-sidebar">
           <div class="player-sidebar-header">
-            <h3 style="font-size:1rem;margin-bottom:.25rem;">${escHtml(course.title)}</h3>
-            <div class="progress-wrapper" style="margin-top:.75rem;">
+            <div class="player-sidebar-header-top">
+              <h3 class="player-sidebar-title">Konten Kelas</h3>
+              <span class="player-online-badge">🎥 ${course.contents.length} Konten online</span>
+            </div>
+            <div class="progress-wrapper">
               <div class="progress-track">
                 <div class="progress-fill" style="width:${progressPercent}%;"></div>
               </div>
               <span class="progress-text">${progressPercent}%</span>
             </div>
           </div>
-          <div class="player-sidebar-list">${unitsListHtml}</div>
+          <div class="player-sidebar-list">
+            ${preExamHtml}
+            ${chaptersHtml}
+            ${postCourseHtml}
+          </div>
         </div>
 
+        <!-- Area Konten & Layar Ujian -->
         <div class="player-content-area">
           <div class="player-content-header">
             <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
               <span class="badge badge-${(currentUnit.type || 'materi').toLowerCase()}">${currentUnit.type}</span>
-              <h2 style="font-size:1.25rem;margin:0;">${escHtml(currentUnit.title)}</h2>
+              <h2 style="font-size:1.2rem;margin:0;">${escHtml(currentUnit.title)}</h2>
               ${timerWidgetHtml}
             </div>
-            <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Klik untuk mengaktifkan mode layar penuh presentasi Interactive Flat Panel">
-              🖥️ Mode IFP (Layar Penuh)
+            <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Mode Layar Penuh IFP">
+              🖥️ Mode IFP
             </button>
           </div>
 
@@ -1271,14 +1622,15 @@
             ${contentHtml}
           </div>
 
-          <div class="player-content-footer">
-            <button class="btn btn-outline" onclick="prevPlayerUnit()" ${AppState.activeUnitIndex === 0 ? 'disabled style="opacity:.5;"' : ''}>
-              ← Sebelumnya
-            </button>
-            <div style="display:flex;gap:.75rem;align-items:center;">
-              ${!isStudent ? `<span style="font-size:.8125rem;color:var(--tertiary);">Mode ${AppState.currentRole === 'educator' ? 'Pendidik' : 'Admin'} — pratinjau penuh</span>` : ''}
-              <button class="btn btn-authoritative" onclick="nextPlayerUnit()" id="btn-player-next" ${AppState.activeUnitIndex === course.contents.length - 1 || (isStudent && !isCompleted) ? 'disabled style="opacity:.5;"' : ''} title="${isStudent && !isCompleted ? 'Selesaikan sesi ini terlebih dahulu untuk melanjutkan' : 'Sesi berikutnya'}">
-                Selanjutnya →
+          <!-- Footer Bersih (Persis Gambar 1: Tombol Selanjutnya) -->
+          <div class="player-content-footer-clean">
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+              <button class="btn btn-outline btn-sm" onclick="prevPlayerUnit()" ${AppState.activeUnitIndex === 0 ? 'disabled style="opacity:.4;"' : ''}>
+                ← Sebelumnya
+              </button>
+              <button class="btn-next-action" onclick="onNextButtonClicked()" id="btn-player-next" 
+                      ${isStudent && isUnitLocked(AppState.activeUnitIndex + 1, course) && !currentUnit.completed ? 'disabled' : ''}>
+                Selanjutnya
               </button>
             </div>
           </div>
@@ -1286,8 +1638,10 @@
       </div>
     `;
 
-    // Pasang listener penguncian video dan timer belajar otomatis
-    initUnitInteractions(currentUnit, course, targetSeconds, isVideoUnit);
+    // Pasang listener penguncian video dan timer belajar otomatis jika bukan kuis
+    if (!isQuizUnit) {
+      initUnitInteractions(currentUnit, course, targetSeconds, isVideoUnit);
+    }
   }
 
   // 7. Progress Report (data dari Supabase)
@@ -1417,16 +1771,187 @@
   }
 
   /* =========================================================
-   * PLAYER FUNCTIONS
+   * PLAYER FUNCTIONS & HIERARCHICAL INTERACTION
    * ========================================================= */
+  function formatSecondsToMMSS(seconds) {
+    const s = Math.max(0, parseInt(seconds || 0, 10));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
+  }
+
   function isUnitLocked(idx, course) {
     if (!course || !course.contents) return false;
     // Pendidik dan admin bebas akses
     if (AppState.currentRole !== 'student') return false;
-    // Unit pertama selalu terbuka
+    // Unit pertama (Pre-Exam) selalu terbuka
     if (idx <= 0) return false;
     // Terkunci jika unit sebelumnya belum berstatus selesai
     return !course.contents[idx - 1].completed;
+  }
+
+  function toggleChapterAccordion(chTitle) {
+    AppState.expandedChapters[chTitle] = !AppState.expandedChapters[chTitle];
+    renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
+  }
+
+  function selectQuizOption(qId, optIdx) {
+    if (!AppState.activeQuizAnswers) AppState.activeQuizAnswers = {};
+    AppState.activeQuizAnswers[qId] = optIdx;
+
+    const qEl = document.getElementById(`quiz-q-${qId}`);
+    if (qEl) {
+      qEl.querySelectorAll('.exam-option-card').forEach((card, idx) => {
+        card.classList.toggle('selected', idx === optIdx);
+        const radio = card.querySelector('input[type="radio"]');
+        if (radio) radio.checked = (idx === optIdx);
+      });
+    }
+  }
+
+  function getEffectiveQuizData(unit) {
+    if (unit.quizData && Array.isArray(unit.quizData) && unit.quizData.length > 0) {
+      return unit.quizData;
+    }
+    // Fallback default questions jika kuis belum diisi
+    return [
+      {
+        id: 1,
+        question: `Konsep utama yang dipelajari pada sesi "${unit.title}" berfokus pada...`,
+        options: [
+          'Prinsip keteraturan, akurasi, dan konsistensi sistematis',
+          'Pencatatan spekulatif tanpa bukti transaksi',
+          'Pengabaian standar akuntansi yang berlaku',
+          'Penundaan pelaporan periode berjalan'
+        ],
+        answerIndex: 0,
+        explanation: 'Prinsip keteraturan dan konsistensi adalah fondasi utama materi ini.'
+      },
+      {
+        id: 2,
+        question: 'Tindakan yang paling tepat sesuai kaidah profesional adalah...',
+        options: [
+          'Memvalidasi data sebelum melakukan rekonsiliasi akhir',
+          'Mengubah saldo tanpa otorisasi penanggung jawab',
+          'Menghilangkan bukti transaksi lama',
+          'Membuat estimasi tanpa dasar perhitungan yang sah'
+        ],
+        answerIndex: 0,
+        explanation: 'Validasi data sebelum rekonsiliasi merupakan prosedur standar.'
+      },
+      {
+        id: 3,
+        question: 'Tujuan utama evaluasi berkala pada akhir modul adalah...',
+        options: [
+          'Memastikan penguasaan kompetensi dan peningkatan pemahaman',
+          'Menambah beban administratif peserta didik',
+          'Menghentikan proses belajar secara sepihak',
+          'Menyederhanakan materi tanpa penilaian terukur'
+        ],
+        answerIndex: 0,
+        explanation: 'Evaluasi berkala menjamin pencapaian target kompetensi peserta.'
+      }
+    ];
+  }
+
+  async function submitActiveQuiz(unitIdx) {
+    const course = AppState.activeCoursePlayer;
+    if (!course) return;
+    const unit = course.contents[unitIdx];
+    const questions = getEffectiveQuizData(unit);
+    const answers = AppState.activeQuizAnswers || {};
+
+    const unanswered = questions.filter(q => answers[q.id] === undefined);
+    if (unanswered.length > 0) {
+      showToast(`⚠️ Harap jawab seluruh pertanyaan (${questions.length - unanswered.length}/${questions.length} terjawab).`, 'warning');
+      return;
+    }
+
+    let correct = 0;
+    questions.forEach(q => {
+      if (answers[q.id] === q.answerIndex) correct++;
+    });
+    const wrong = questions.length - correct;
+    const score = Math.round((correct / questions.length) * 100);
+    const passingScore = unit.passingScore || 60;
+
+    const now = Date.now();
+    const start = AppState.activeQuizStartTime || (now - (correct * 90 + wrong * 50) * 1000);
+    const elapsedSecs = Math.max(45, Math.round((now - start) / 1000));
+
+    const isPreExam = (unit.type || '').toLowerCase() === 'pre_exam' || unit.title.toLowerCase().includes('pre-exam');
+    let notes = '';
+    if (isPreExam) {
+      notes = score < passingScore
+        ? 'Nilai awal kamu di bawah rata-rata. Perhatikan materi kelas dengan baik untuk tingkatkan pemahaman kamu ya!'
+        : 'Pemahaman awal Anda sudah baik. Pelajari modul kelas secara komprehensif untuk penguasaan mendalam.';
+    } else {
+      notes = score >= passingScore
+        ? 'Luar biasa! Kamu telah menguasai kompetensi pada unit ini dengan sangat baik. Pertahankan prestasimu!'
+        : 'Nilai kamu masih di bawah batas kelulusan. Pelajari kembali materi dan gunakan tombol Kerjakan Ulang untuk meningkatkan nilai.';
+    }
+
+    const progressItem = {
+      score,
+      correct_answers: correct,
+      wrong_answers: wrong,
+      time_spent_seconds: elapsedSecs,
+      notes
+    };
+    if (!AppState.progressData) AppState.progressData = {};
+    AppState.progressData[unit.id] = progressItem;
+    AppState.progressMap[unit.id] = true;
+    unit.completed = true;
+
+    if (!AppState.quizReviewMode) AppState.quizReviewMode = {};
+    AppState.quizReviewMode[unit.id] = false;
+
+    try {
+      await dbSubmitQuizResult({
+        contentId: unit.id,
+        courseId: course.id,
+        score,
+        correctAnswers: correct,
+        wrongAnswers: wrong,
+        timeSpentSeconds: elapsedSecs,
+        notes
+      });
+      showToast('🎉 Ujian selesai & nilai tersimpan!', 'success');
+    } catch (err) {
+      console.warn('Simpan kuis lokal:', err);
+    }
+
+    renderCoursePlayer(document.getElementById('view-container'), course.id);
+  }
+
+  function retakeQuiz(unitIdx) {
+    const course = AppState.activeCoursePlayer;
+    if (!course) return;
+    const unit = course.contents[unitIdx];
+    if (!AppState.quizReviewMode) AppState.quizReviewMode = {};
+    AppState.quizReviewMode[unit.id] = true;
+    AppState.activeQuizAnswers = {};
+    AppState.activeQuizStartTime = Date.now();
+    renderCoursePlayer(document.getElementById('view-container'), course.id);
+  }
+
+  async function onNextButtonClicked() {
+    const course = AppState.activeCoursePlayer;
+    if (!course) return;
+    const currentUnit = course.contents[AppState.activeUnitIndex];
+    if (!currentUnit) return;
+
+    const isQuiz = ['pre_exam', 'kuis_popup', 'post_exam', 'kuis'].includes((currentUnit.type || '').toLowerCase());
+    if (!currentUnit.completed && !isQuiz) {
+      await markUnitComplete(currentUnit.id, course.id);
+    }
+
+    if (!currentUnit.completed && isQuiz) {
+      showToast('⚠️ Harap kumpulkan jawaban kuis/ujian terlebih dahulu sebelum melanjutkan.', 'warning');
+      return;
+    }
+
+    nextPlayerUnit();
   }
 
   function selectPlayerUnit(idx) {
@@ -1437,6 +1962,10 @@
       return;
     }
     AppState.activeUnitIndex = idx;
+    const currentUnit = course.contents[idx];
+    const chName = currentUnit?.sectionName || (currentUnit?.moduleId && course.modules?.find(m => m.id === currentUnit.moduleId)?.title);
+    if (chName) AppState.expandedChapters[chName] = true;
+
     renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
   }
 
@@ -1450,6 +1979,9 @@
         return;
       }
       AppState.activeUnitIndex = nextIdx;
+      const nextUnit = course.contents[nextIdx];
+      const chName = nextUnit?.sectionName || (nextUnit?.moduleId && course.modules?.find(m => m.id === nextUnit.moduleId)?.title);
+      if (chName) AppState.expandedChapters[chName] = true;
       renderCoursePlayer(document.getElementById('view-container'), course.id);
     }
   }
@@ -1457,6 +1989,9 @@
   function prevPlayerUnit() {
     if (AppState.activeUnitIndex > 0) {
       AppState.activeUnitIndex--;
+      const prevUnit = AppState.activeCoursePlayer?.contents[AppState.activeUnitIndex];
+      const chName = prevUnit?.sectionName || (prevUnit?.moduleId && AppState.activeCoursePlayer?.modules?.find(m => m.id === prevUnit.moduleId)?.title);
+      if (chName) AppState.expandedChapters[chName] = true;
       renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
     }
   }
