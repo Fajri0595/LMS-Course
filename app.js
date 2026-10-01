@@ -407,6 +407,11 @@
   }
 
   async function handleLogin(e) {
+    const target = AppState.activeLoginTab || 'student';
+    try {
+      localStorage.setItem('coursehub_login_role_intent', target);
+    } catch (err) {}
+
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
     const btn = document.getElementById('login-submit-btn');
@@ -442,12 +447,13 @@
     AppState.authUser = authUser;
     AppState.isDemoMode = false;
 
-    // Pulihkan preferensi tab login jika ada (misal setelah redirect OAuth)
+    // Periksa apakah login ini dipicu secara aktif dari tab tertentu (misal klik login / redirect OAuth)
     const savedIntent = localStorage.getItem('coursehub_login_role_intent');
+    const isExplicitLoginAttempt = !!savedIntent;
     if (savedIntent) {
       AppState.activeLoginTab = savedIntent;
     }
-    const activeTab = AppState.activeLoginTab || 'student';
+    const activeTab = savedIntent || 'student';
 
     // Ambil profil dari tabel profiles berdasarkan auth_user_id
     const sb = getSupabase();
@@ -558,48 +564,50 @@
     }
 
     // =========================================================
-    // VALIDASI PERAN LOGIN KETAT (Strict Portal Role Segregation)
+    // VALIDASI PERAN LOGIN KETAT (Hanya saat proses login baru aktif)
     // =========================================================
-    let userRole = (AppState.user?.role || '').toLowerCase();
+    if (isExplicitLoginAttempt) {
+      let userRole = (AppState.user?.role || '').toLowerCase();
 
-    // 1. Batasi jika akun peserta login di sisi tutor
-    if (activeTab === 'educator' && userRole === 'student') {
-      showLoginError('⛔ Akses Ditolak: Akun Anda terdaftar sebagai Peserta Didik dan tidak diizinkan masuk melalui Portal Tutor. Silakan klik tab "Peserta Didik".');
-      await sb.auth.signOut();
-      AppState.user = null;
-      AppState.authUser = null;
-      return;
-    }
-
-    // 2. Batasi jika akun peserta atau tutor login di sisi administrator
-    if (activeTab === 'admin' && userRole !== 'admin') {
-      // Jika sistem belum memiliki Admin sama sekali, promosikan akun terdaftar ini menjadi Administrator
-      const { data: existingAdmins } = await sb
-        .from('profiles')
-        .select('id')
-        .eq('role', 'admin')
-        .limit(1);
-
-      if (!existingAdmins || existingAdmins.length === 0) {
-        await sb.from('profiles').update({ role: 'admin' }).eq('id', AppState.user.id);
-        AppState.user.role = 'admin';
-        userRole = 'admin';
-      } else {
-        showLoginError('⛔ Akses Ditolak: Akun Anda tidak memiliki hak akses sebagai Administrator Institusi.');
+      // 1. Batasi jika akun peserta login di sisi tutor
+      if (activeTab === 'educator' && userRole === 'student') {
+        showLoginError('⛔ Akses Ditolak: Akun Anda terdaftar sebagai Peserta Didik dan tidak diizinkan masuk melalui Portal Tutor. Silakan klik tab "Peserta Didik".');
         await sb.auth.signOut();
         AppState.user = null;
         AppState.authUser = null;
         return;
       }
-    }
 
-    // 3. Batasi jika akun tutor login di sisi peserta didik
-    if (activeTab === 'student' && userRole === 'educator') {
-      showLoginError('⛔ Akses Ditolak: Akun Anda terdaftar sebagai Tutor Pengampu. Silakan gunakan tab "Tutor" untuk masuk.');
-      await sb.auth.signOut();
-      AppState.user = null;
-      AppState.authUser = null;
-      return;
+      // 2. Batasi jika akun peserta atau tutor login di sisi administrator
+      if (activeTab === 'admin' && userRole !== 'admin') {
+        // Jika sistem belum memiliki Admin sama sekali, promosikan akun terdaftar ini menjadi Administrator
+        const { data: existingAdmins } = await sb
+          .from('profiles')
+          .select('id')
+          .eq('role', 'admin')
+          .limit(1);
+
+        if (!existingAdmins || existingAdmins.length === 0) {
+          await sb.from('profiles').update({ role: 'admin' }).eq('id', AppState.user.id);
+          AppState.user.role = 'admin';
+          userRole = 'admin';
+        } else {
+          showLoginError('⛔ Akses Ditolak: Akun Anda tidak memiliki hak akses sebagai Administrator Institusi.');
+          await sb.auth.signOut();
+          AppState.user = null;
+          AppState.authUser = null;
+          return;
+        }
+      }
+
+      // 3. Batasi jika akun tutor login di sisi peserta didik
+      if (activeTab === 'student' && userRole === 'educator') {
+        showLoginError('⛔ Akses Ditolak: Akun Anda terdaftar sebagai Tutor Pengampu. Silakan gunakan tab "Tutor" untuk masuk.');
+        await sb.auth.signOut();
+        AppState.user = null;
+        AppState.authUser = null;
+        return;
+      }
     }
 
     hideLoginPage();
