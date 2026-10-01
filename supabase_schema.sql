@@ -158,33 +158,9 @@ CREATE POLICY "Public Insert Submissions" ON public.assignment_submissions FOR I
 CREATE POLICY "Public Update Submissions" ON public.assignment_submissions FOR UPDATE USING (true);
 CREATE POLICY "Public Delete Submissions" ON public.assignment_submissions FOR DELETE USING (true);
 
+
 -- ==============================================================================
--- Initial Seed Data (Contoh Data Awal)
+-- End of Schema Definition
+-- Semua data pengguna, course, dan materi diinput secara dinamis melalui aplikasi.
 -- ==============================================================================
 
--- 1. Pendidik & Siswa
-INSERT INTO public.profiles (id, name, email, role, subject, class_name, status)
-VALUES 
-  ('11111111-1111-1111-1111-111111111111', 'Administrator Institusi', 'admin@institusi.sch.id', 'admin', 'Super Admin', 'Pusat', 'Aktif'),
-  ('22222222-2222-2222-2222-222222222222', 'Dr. Syarif Hidayat, M.Pd.', 'syarif@institusi.sch.id', 'educator', 'Fisika & Sains', 'Guru Pengampu', 'Aktif'),
-  ('33333333-3333-3333-3333-333333333333', 'Nurul Aini, S.Si., M.Sc.', 'nurul.aini@institusi.sch.id', 'educator', 'Biologi', 'Guru Pengampu', 'Aktif'),
-  ('44444444-4444-4444-4444-444444444444', 'Annisa Nurul Hidayah', 'annisa.n@siswa.institusi.sch.id', 'student', 'Siswa', 'XII MIPA 1', 'Aktif'),
-  ('55555555-5555-5555-5555-555555555555', 'Ahmad Fauzi', 'ahmad.f@siswa.institusi.sch.id', 'student', 'Siswa', 'XII MIPA 1', 'Aktif')
-ON CONFLICT (id) DO NOTHING;
-
--- 2. Course Contoh
-INSERT INTO public.courses (id, title, description, author_id, author_name, status, cover_gradient)
-VALUES 
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Fisika Kuantum & Dinamika Gerak Interaktif', 'Pemahaman konsep dasar fisika gerak dan mekanika melalui simulasi interaktif untuk kelas XII.', '22222222-2222-2222-2222-222222222222', 'Dr. Syarif Hidayat, M.Pd.', 'Aktif', 'linear-gradient(135deg, #1e3a5f 0%, #14b8a6 100%)'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Biologi Sel & Sintesis Protein', 'Eksplorasi struktur organel sel, replikasi DNA, dan tahapan translasi protein dengan visual 3D.', '22222222-2222-2222-2222-222222222222', 'Dr. Syarif Hidayat, M.Pd.', 'Aktif', 'linear-gradient(135deg, #0f766e 0%, #2a3a4f 100%)')
-ON CONFLICT (id) DO NOTHING;
-
--- 3. Unit Konten
-INSERT INTO public.course_contents (course_id, title, type, duration, order_index, embed_url, content_body)
-VALUES 
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '1. Pengantar Mekanika Kuantum', 'Materi', '15 Menit', 1, NULL, '<h3>Konsep Gelombang Partikel</h3><p>Mekanika kuantum menjelaskan perilaku materi dan energi pada skala atomik dan subatomik. Dualitas gelombang-partikel menyatakan bahwa partikel seperti elektron dapat menunjukkan sifat gelombang.</p><div style="margin-top:1.5rem; padding:1.25rem; background:#f8fafc; border-left:4px solid #14b8a6; border-radius:8px;"><strong>Fakta Kunci:</strong> Teori kuantum pertama kali dirumuskan oleh Max Planck pada tahun 1900 melalui kuantisasi radiasi benda hitam.</div>'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2. Video Eksperimen Celah Ganda', 'Video', '12 Menit', 2, 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', '<p>Video demonstrasi pola interferensi elektron saat melewati dua celah sempit, membuktikan sifat gelombang partikel kuantum.</p>'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '3. Kaidah & Hukum Ketidakpastian Heisenberg', 'Kaidah', '10 Menit', 3, NULL, '<h3>Prinsip Ketidakpastian</h3><p>Secara matematis dirumuskan sebagai: <code>Δx · Δp ≥ ℏ/2</code></p><p>Artinya, posisi dan momentum sebuah partikel kuantum tidak dapat diukur secara serentak dengan kepastian yang tak terbatas.</p>'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '4. Latihan Soal Probabilitas Gelombang', 'Latihan', '20 Menit', 4, NULL, '<h3>Latihan Mandiri</h3><p>Hitunglah panjang gelombang de Broglie untuk sebuah elektron yang bergerak dengan kecepatan 2.0 × 10^6 m/s!</p><textarea class="form-control" rows="4" placeholder="Tuliskan langkah pengerjaan Anda di sini..."></textarea>'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '5. Kuis Evaluasi Pemahaman Modul 1', 'Kuis', '25 Menit', 5, NULL, '<h3>Kuis Evaluasi Akhir</h3><p>Pilihlah satu jawaban yang paling tepat dari pertanyaan berikut.</p><div style="margin-top:1rem;"><label style="display:block; margin-bottom:0.5rem;"><input type="radio" name="q1" value="a"> A. Elektron selalu berbentuk gelombang murni</label><label style="display:block; margin-bottom:0.5rem;"><input type="radio" name="q1" value="b"> B. Partikel memiliki panjang gelombang terkait massanya</label></div>')
-ON CONFLICT DO NOTHING;

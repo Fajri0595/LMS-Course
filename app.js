@@ -34,13 +34,7 @@
     activeQuizAnswers: {},    // { [questionId]: optionIdx }
     activeQuizStartTime: null,
     quizReviewMode: {},       // { [unitId]: boolean }
-    // Demo mode (untuk presentasi IFP tanpa login)
-    isDemoMode: false,
-    demoProfiles: {
-      admin:   { id: '11111111-1111-1111-1111-111111111111', name: 'Administrator Institusi', email: 'admin@institusi.sch.id', role: 'admin', subject: 'Super Admin', class_name: 'Pusat', phone: '081234567890', whatsapp: '6281234567890' },
-      educator:{ id: '22222222-2222-2222-2222-222222222222', name: 'Dr. Syarif Hidayat, M.Pd.', email: 'syarif@institusi.sch.id', role: 'educator', subject: 'Akuntansi & Keuangan', class_name: 'Guru Pengampu', phone: '081298765432', whatsapp: '6281298765432' },
-      student: { id: '44444444-4444-4444-4444-444444444444', name: 'Annisa Nurul Hidayah', email: 'annisa.n@siswa.institusi.sch.id', role: 'student', subject: 'Siswa', class_name: 'XII MIPA 1', phone: '085712345678', whatsapp: '6285712345678' }
-    }
+    isDemoMode: false
   };
 
 
@@ -51,10 +45,8 @@
     const sb = typeof getSupabase === 'function' ? getSupabase() : null;
 
     if (!sb) {
-      // Supabase tidak terkonfigurasi — langsung demo mode
-      console.warn('⚠️ Supabase tidak terkonfigurasi. Berjalan dalam mode demo.');
-      const savedDemo = localStorage.getItem('lms_demo_role') || 'student';
-      enterDemoMode(savedDemo);
+      console.warn('⚠️ Supabase tidak terkonfigurasi.');
+      renderLoginPage();
       return;
     }
 
@@ -72,12 +64,7 @@
     if (session) {
       await handleSessionStart(session.user);
     } else {
-      const savedDemoRole = localStorage.getItem('lms_demo_role');
-      if (savedDemoRole && AppState.demoProfiles[savedDemoRole]) {
-        enterDemoMode(savedDemoRole);
-      } else {
-        renderLoginPage();
-      }
+      renderLoginPage();
     }
   });
 
@@ -129,7 +116,7 @@
           <form id="form-login" onsubmit="handleLogin(event)">
             <div class="form-group">
               <label class="form-label" id="login-email-label">Email Peserta Didik</label>
-              <input type="email" id="login-email" class="form-control" placeholder="contoh: annisa.n@siswa.institusi.sch.id" required autocomplete="email">
+              <input type="email" id="login-email" class="form-control" placeholder="contoh: siswa@institusi.ac.id" required autocomplete="email">
             </div>
             <div class="form-group">
               <label class="form-label">Password</label>
@@ -146,18 +133,6 @@
               Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.
             </p>
           </form>
-
-          <!-- Quick Demo Shortcut (IFP Presentasi) -->
-          <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px dashed var(--border);text-align:center;">
-            <div style="font-size:0.75rem;font-weight:600;color:var(--tertiary);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.5px;">
-              ⚡ Akses Demonstrasi Cepat (Tanpa Password)
-            </div>
-            <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
-              <button type="button" class="btn btn-outline btn-sm" onclick="enterDemoMode('student')">🎓 Demo Siswa</button>
-              <button type="button" class="btn btn-outline btn-sm" onclick="enterDemoMode('educator')">👨‍🏫 Demo Tutor</button>
-              <button type="button" class="btn btn-outline btn-sm" onclick="enterDemoMode('admin')">⚙️ Demo Admin</button>
-            </div>
-          </div>
 
         </div>
       </div>
@@ -192,19 +167,19 @@
 
     if (target === 'student') {
       if (emailLabel) emailLabel.textContent = 'Email Peserta Didik';
-      if (emailInput) emailInput.placeholder = 'contoh: annisa.n@siswa.institusi.sch.id';
+      if (emailInput) emailInput.placeholder = 'contoh: siswa@institusi.ac.id';
       if (btnIcon) btnIcon.textContent = '🎓';
       if (btnText) btnText.textContent = 'Masuk sebagai Peserta Didik';
       if (hintText) hintText.textContent = 'Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.';
     } else if (target === 'educator') {
       if (emailLabel) emailLabel.textContent = 'Email Tutor Pengampu';
-      if (emailInput) emailInput.placeholder = 'contoh: syarif@institusi.sch.id';
+      if (emailInput) emailInput.placeholder = 'contoh: tutor@institusi.ac.id';
       if (btnIcon) btnIcon.textContent = '👨‍🏫';
       if (btnText) btnText.textContent = 'Masuk sebagai Tutor';
       if (hintText) hintText.textContent = 'Portal khusus Tutor Pengampu. Masuk untuk mengelola materi, jadwal Zoom, dan verifikasi kelulusan tema.';
     } else if (target === 'admin') {
       if (emailLabel) emailLabel.textContent = 'Email Administrator';
-      if (emailInput) emailInput.placeholder = 'contoh: admin@institusi.sch.id';
+      if (emailInput) emailInput.placeholder = 'contoh: admin@institusi.ac.id';
       if (btnIcon) btnIcon.textContent = '⚙️';
       if (btnText) btnText.textContent = 'Masuk sebagai Administrator';
       if (hintText) hintText.textContent = 'Portal Administrator Pusat Institusi. Akses pengaturan sistem, data pengguna, dan seluruh kurikulum.';
@@ -310,14 +285,6 @@
     await initApp();
   }
 
-  async function enterDemoMode(role) {
-    try { localStorage.setItem('lms_demo_role', role); } catch (e) {}
-    AppState.isDemoMode = true;
-    AppState.user = { ...AppState.demoProfiles[role] };
-    hideLoginPage();
-    await initApp();
-  }
-
   function hideLoginPage() {
     const loginEl = document.getElementById('login-overlay');
     if (loginEl) loginEl.style.display = 'none';
@@ -349,11 +316,10 @@
       localStorage.removeItem('lms_demo_role');
     } catch (e) {}
     const sb = typeof getSupabase === 'function' ? getSupabase() : null;
-    if (sb && !AppState.isDemoMode) {
+    if (sb) {
       await sb.auth.signOut();
-    } else {
-      renderLoginPage();
     }
+    renderLoginPage();
   }
 
   /* =========================================================
@@ -503,53 +469,7 @@
     }
 
     AppState.courses = (data || []).map(c => {
-      let rawContents = (c.contents || []).slice();
-
-      // Pastikan unit gerbang tema (Tugas Google Drive & Sesi Zoom) terpasang di Course Akuntansi untuk demo langsung
-      if (c.id === 'cccccccc-cccc-cccc-cccc-cccccccccccc' || c.title.toLowerCase().includes('akuntansi')) {
-        const hasDriveGate = rawContents.some(cnt => (cnt.type || '').toLowerCase() === 'tugas_drive' || cnt.title.includes('Google Drive'));
-        if (!hasDriveGate) {
-          rawContents.push({
-            id: 'c1000000-0000-0000-0000-000000000021',
-            moduleId: 'd1111111-1111-1111-1111-111111111111',
-            sectionName: 'Akuntansi Dasar',
-            title: 'Tugas Tema 1: Lembar Kerja Akuntansi (Google Drive)',
-            type: 'tugas_drive',
-            duration: '30 Menit',
-            embedUrl: '',
-            contentBody: '<h3>Instruksi Tugas Akhir Tema 1</h3><p>Sebagai syarat kelulusan Tema 1 dan membuka Tema 2 (Laporan Keuangan Perusahaan), Anda wajib mengerjakan lembar kerja siklus akuntansi transaksi UD Sumber Makmur pada Google Spreadsheet.</p><div class="lms-box-tip">💡 <strong>Petunjuk Pengumpulan:</strong><br>1. Buat salinan (copy) lembar kerja transaksi ke Google Drive Anda.<br>2. Kerjakan jurnal umum, buku besar, dan neraca saldo.<br>3. Atur izin berbagi link menjadi <em>"Siapa saja yang memiliki link dapat melihat"</em>.<br>4. Tempelkan link Google Drive Anda pada formulir di bawah ini dan klik tombol Kirim Tugas.</div>',
-            orderIndex: 8.5,
-            passingScore: 75
-          });
-        }
-
-        const hasZoomGate = rawContents.some(cnt => (cnt.type || '').toLowerCase() === 'tugas_zoom' || cnt.title.includes('Zoom'));
-        if (!hasZoomGate) {
-          rawContents.push({
-            id: 'c1000000-0000-0000-0000-000000000022',
-            moduleId: 'd2222222-2222-2222-2222-222222222222',
-            sectionName: 'Laporan Keuangan Perusahaan',
-            title: 'Struktur Laporan Laba Rugi Komprehensif',
-            type: 'materi',
-            duration: '10 Menit',
-            embedUrl: '',
-            contentBody: '<h3>Struktur Laporan Laba Rugi Komprehensif</h3><p>Laporan Laba Rugi menyajikan pendapatan dan beban entitas selama satu periode tertentu untuk menilai kinerja profitabilitas bisnis.</p>',
-            orderIndex: 9.1
-          });
-          rawContents.push({
-            id: 'c1000000-0000-0000-0000-000000000023',
-            moduleId: 'd2222222-2222-2222-2222-222222222222',
-            sectionName: 'Laporan Keuangan Perusahaan',
-            title: 'Tugas Tema 2: Evaluasi Tatap Muka (Zoom Meeting)',
-            type: 'tugas_zoom',
-            duration: '45 Menit',
-            embedUrl: '',
-            contentBody: '<h3>Sesi Evaluasi Tatap Muka Virtual via Zoom</h3><p>Pada tema ini, evaluasi kelulusan dilaksanakan secara langsung (live 1-on-1 / kelompok kecil) bersama Tutor Pengampu melalui platform Zoom Meeting.</p><div class="lms-box-info">🎯 <strong>Mekanisme Sesi Zoom:</strong><br>1. <strong>Peserta menyediakan Link Zoom</strong> (buat meeting room Zoom baru dan salin link join).<br>2. <strong>Pilih usulan tanggal & jam pertemuan</strong> yang Anda inginkan.<br>3. <strong>Konfirmasikan jadwal ke WhatsApp Tutor</strong> melalui tombol yang tersedia agar tutor dapat menyetujui jadwal.<br>4. Masuk ke ruang Zoom pada waktu yang disepakati. Tutor akan memberikan penilaian langsung dan meng-approve kelulusan tema Anda.</div>',
-            orderIndex: 9.5,
-            passingScore: 80
-          });
-        }
-      }
+      const rawContents = (c.contents || []).slice();
 
       return {
         id: c.id,
@@ -593,8 +513,8 @@
         email: e.email,
         subject: e.subject || 'Umum',
         status: e.status || 'Aktif',
-        phone: e.phone || (e.email.includes('syarif') ? '081298765432' : '081234567890'),
-        whatsapp: e.whatsapp || (e.email.includes('syarif') ? '6281298765432' : '6281234567890'),
+        phone: e.phone || '',
+        whatsapp: e.whatsapp || '',
         totalCourses: AppState.courses.filter(c => c.authorId === e.id).length
       }));
 
@@ -604,10 +524,10 @@
         id: s.id,
         name: s.name,
         email: s.email,
-        class: s.class_name || 'XII MIPA 1',
+        class: s.class_name || '-',
         status: s.status || 'Aktif',
-        phone: s.phone || '085712345678',
-        whatsapp: s.whatsapp || '6285712345678',
+        phone: s.phone || '',
+        whatsapp: s.whatsapp || '',
         progress: 0,
         completedCourses: 0
       }));
@@ -701,52 +621,8 @@
       } catch (e) {}
     }
 
-    // Seed data submisi demo jika masih kosong (agar langsung bisa didemokan)
-    if (!submissions || submissions.length === 0) {
-      submissions = [
-        {
-          id: 'sub-demo-drive-01',
-          course_id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
-          module_id: 'd1111111-1111-1111-1111-111111111111',
-          content_id: 'c1000000-0000-0000-0000-000000000021',
-          student_id: '44444444-4444-4444-4444-444444444444',
-          student_name: 'Annisa Nurul Hidayah',
-          student_email: 'annisa.n@siswa.institusi.sch.id',
-          tutor_id: '22222222-2222-2222-2222-222222222222',
-          tutor_name: 'Dr. Syarif Hidayat, M.Pd.',
-          type: 'drive',
-          drive_url: 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit?usp=sharing',
-          student_notes: 'Berikut lembar kerja praktik siklus akuntansi transaksi UD Sumber Makmur yang sudah saya susun (Jurnal, Buku Besar, Neraca Saldo). Mohon koreksinya ya Coach.',
-          approval_status: 'pending',
-          score: null,
-          tutor_feedback: '',
-          submitted_at: new Date(Date.now() - 3600000 * 2).toISOString()
-        },
-        {
-          id: 'sub-demo-zoom-02',
-          course_id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
-          module_id: 'd2222222-2222-2222-2222-222222222222',
-          content_id: 'c1000000-0000-0000-0000-000000000023',
-          student_id: '55555555-5555-5555-5555-555555555555',
-          student_name: 'Ahmad Fauzi',
-          student_email: 'ahmad.f@siswa.institusi.sch.id',
-          tutor_id: '22222222-2222-2222-2222-222222222222',
-          tutor_name: 'Dr. Syarif Hidayat, M.Pd.',
-          type: 'zoom',
-          zoom_url: 'https://us05web.zoom.us/j/88392019482?pwd=LMSCourseDemo2026',
-          zoom_meeting_time: new Date(Date.now() + 3600000 * 24).toISOString(),
-          schedule_status: 'proposed',
-          approval_status: 'pending',
-          score: null,
-          student_notes: 'Saya ingin konsultasi pemahaman laporan posisi keuangan dan penyesuaian akhir periode.',
-          tutor_feedback: '',
-          submitted_at: new Date(Date.now() - 3600000 * 5).toISOString()
-        }
-      ];
-      try { localStorage.setItem('lms_submissions', JSON.stringify(submissions)); } catch (e) {}
-    }
-
-    AppState.submissions = submissions;
+    AppState.submissions = submissions || [];
+    updatePendingBadge();
     updatePendingBadge();
   }
 
@@ -835,33 +711,33 @@
   function getTutorForCourse(course) {
     if (!course) {
       return AppState.educators[0] || {
-        id: '22222222-2222-2222-2222-222222222222',
-        name: 'Dr. Syarif Hidayat, M.Pd.',
-        subject: 'Akuntansi & Keuangan',
-        phone: '081298765432',
-        whatsapp: '6281298765432',
-        email: 'syarif@institusi.sch.id'
+        id: '',
+        name: 'Tutor Pengampu',
+        subject: 'Tutor Pengampu',
+        phone: '',
+        whatsapp: '',
+        email: ''
       };
     }
     const found = AppState.educators.find(e => e.id === course.authorId || e.name === course.authorName);
     if (found) return found;
     return {
-      id: course.authorId || '22222222-2222-2222-2222-222222222222',
-      name: course.authorName || 'Dr. Syarif Hidayat, M.Pd.',
+      id: course.authorId || '',
+      name: course.authorName || 'Tutor Pengampu',
       subject: 'Tutor Pengampu Course',
-      phone: '081298765432',
-      whatsapp: '6281298765432',
-      email: 'syarif@institusi.sch.id'
+      phone: '',
+      whatsapp: '',
+      email: ''
     };
   }
 
   function renderTutorContactCard(tutor, course = null, unit = null, customActionText = null) {
-    const tutorPhone = tutor.whatsapp || tutor.phone || '6281298765432';
+    const tutorPhone = tutor.whatsapp || tutor.phone || '';
     const initials = (tutor.name || 'Tutor').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
     const courseTitle = course?.title || 'Course';
     const unitTitle = unit?.title || 'Materi Belajar';
     const defaultMsg = `Halo Coach ${tutor.name}, saya ${AppState.user?.name || 'Peserta'} dari kelas "${courseTitle}" pada materi "${unitTitle}". Saya ingin bertanya/berkonsultasi mengenai materi ini. Terima kasih! 🙏`;
-    const waUrl = buildWhatsAppLink(tutorPhone, defaultMsg);
+    const waUrl = tutorPhone ? buildWhatsAppLink(tutorPhone, defaultMsg) : '#';
 
     return `
       <div class="tutor-contact-widget">
@@ -874,10 +750,14 @@
             </div>
           </div>
         </div>
+        ${tutorPhone ? `
         <a href="${waUrl}" target="_blank" rel="noopener noreferrer" class="btn-whatsapp btn-whatsapp-pulse" title="Hubungi Tutor via WhatsApp">
           <svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.698c.969.584 1.761.813 2.796.814 3.183 0 5.769-2.587 5.769-5.767 0-3.181-2.586-5.768-5.769-5.768zm7.969 5.766c0 4.398-3.572 7.969-7.969 7.969-1.393 0-2.696-.36-3.83-1l-4.181 1.095 1.115-4.083c-.724-1.189-1.104-2.56-1.104-3.981 0-4.398 3.572-7.969 7.969-7.969 4.397 0 7.969 3.571 7.969 7.969z"/></svg>
           <span>${customActionText || 'Hubungi Tutor via WhatsApp'}</span>
         </a>
+        ` : `
+        <span style="font-size:0.8125rem;color:var(--tertiary);font-style:italic;">Kontak WhatsApp belum diatur</span>
+        `}
       </div>
     `;
   }
@@ -1421,39 +1301,10 @@
   }
 
   /* =========================================================
-   * DEMO MODE — Role Switcher (untuk presentasi IFP)
+   * ROLE SWITCHER (Deprecated — Peran ditentukan oleh akun)
    * ========================================================= */
   async function setRole(role) {
-    // Jika sudah login sungguhan, role switcher hanya untuk demo/preview
-    if (!AppState.isDemoMode && AppState.authUser) {
-      const confirmed = confirm('Role Switcher ini untuk mode demo/presentasi. Akun login Anda tetap aktif. Lanjutkan?');
-      if (!confirmed) return;
-    }
-    AppState.isDemoMode = true;
-    AppState.user = { ...AppState.demoProfiles[role] };
-    AppState.currentRole = role;
-
-    updateTopbarRoleBadge(role);
-
-    // Update active class pada topbar role switch buttons
-    document.querySelectorAll('.role-switch-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.id === `btn-switch-${role}`);
-    });
-
-    const initials = AppState.user.name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
-    document.getElementById('user-avatar-text').textContent = initials;
-    document.getElementById('user-display-name').textContent = AppState.user.name;
-    const roleLabels = { admin: 'Super Administrator', educator: 'Tutor Pengampu', student: 'Peserta Didik' };
-    document.getElementById('user-display-role').textContent = roleLabels[role];
-
-    showLoadingState();
-    await loadInitialData();
-
-    if (role === 'admin') { buildSidebarForAdmin(); navigateTo('admin-dashboard'); }
-    else if (role === 'educator') { buildSidebarForEducator(); navigateTo('educator-dashboard'); }
-    else { buildSidebarForStudent(); navigateTo('student-dashboard'); }
-
-    showToast(`Beralih Peran: ${roleLabels[role]}`, 'success');
+    console.info('Peran LMS ditentukan berdasarkan autentikasi akun aktif:', role);
   }
 
   /* =========================================================
@@ -4800,11 +4651,9 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
         await sb.from('course_contents').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         await sb.from('courses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         
-        // Hapus profiles demo kecuali akun admin saat ini
+        // Hapus profiles kecuali akun saat ini
         if (AppState.user?.email) {
           await sb.from('profiles').delete().neq('email', AppState.user.email);
-        } else {
-          await sb.from('profiles').delete().not('email', 'in', '("admin@institusi.sch.id","syarif@institusi.sch.id")');
         }
       }
 

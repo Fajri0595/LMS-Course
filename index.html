@@ -2675,10 +2675,10 @@
 
       <div class="sidebar-footer">
         <div class="user-badge">
-          <div class="user-avatar" id="user-avatar-text">SH</div>
+          <div class="user-avatar" id="user-avatar-text">--</div>
           <div class="user-info">
-            <div class="user-name" id="user-display-name">Dr. Syarif Hidayat</div>
-            <div class="user-role" id="user-display-role">Pendidik Pengampu</div>
+            <div class="user-name" id="user-display-name">Memuat...</div>
+            <div class="user-role" id="user-display-role">Pengguna LMS</div>
           </div>
         </div>
       </div>
@@ -2703,24 +2703,17 @@
         </div>
 
         <div class="topbar-right">
-          <!-- Role Switcher Quick Demo Bar -->
-          <div class="role-switcher" role="group" aria-label="Ganti Peran Demo">
-            <button class="role-btn role-switch-btn" id="btn-switch-student" onclick="setRole('student')" title="Lihat sebagai Siswa">
-              <span>🎓</span> Siswa
-            </button>
-            <button class="role-btn role-switch-btn active" id="btn-switch-educator" onclick="setRole('educator')" title="Lihat sebagai Tutor/Pengampu">
-              <span>👨‍🏫</span> Tutor
-            </button>
-            <button class="role-btn role-switch-btn" id="btn-switch-admin" onclick="setRole('admin')" title="Lihat sebagai Administrator">
-              <span>⚙️</span> Admin
-            </button>
-          </div>
-
           <!-- Active Role Display -->
           <div class="user-role-pill role-educator" id="topbar-role-badge" title="Peran akun aktif saat ini">
             <span class="role-indicator-dot"></span>
             <span id="topbar-role-label">Tutor</span>
           </div>
+
+          <!-- Tombol Keluar / Logout -->
+          <button class="btn btn-outline btn-sm" onclick="handleLogout()" title="Keluar dari akun LMS" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.4rem 0.75rem;font-weight:500;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span>Keluar</span>
+          </button>
         </div>
       </header>
 
