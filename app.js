@@ -155,8 +155,12 @@
             <span>atau masuk dengan email & password</span>
           </div>
 
-          <!-- FORM LOGIN (Peserta Didik, Tutor & Admin — dibedakan secara visual) -->
-          <form id="form-login" onsubmit="handleLogin(event)">
+          <!-- FORM LOGIN & DAFTAR (Peserta Didik, Tutor & Admin) -->
+          <form id="form-login" onsubmit="handleAuthSubmit(event)">
+            <div id="register-name-group" class="form-group" style="display:none;">
+              <label class="form-label">Nama Lengkap</label>
+              <input type="text" id="register-name" class="form-control" placeholder="contoh: Muhammad Farhan">
+            </div>
             <div class="form-group">
               <label class="form-label" id="login-email-label">Email Peserta Didik</label>
               <input type="email" id="login-email" class="form-control" placeholder="contoh: siswa@institusi.ac.id" required autocomplete="email">
@@ -164,13 +168,17 @@
             <div class="form-group">
               <label class="form-label">Password</label>
               <div style="position:relative;">
-                <input type="password" id="login-password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password" style="padding-right:3rem;">
+                <input type="password" id="login-password" class="form-control" placeholder="Masukkan password (min. 6 karakter)" required autocomplete="current-password" style="padding-right:3rem;">
                 <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);">👁️</button>
               </div>
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
               <span id="login-btn-text">Masuk sebagai Peserta Didik</span>
             </button>
+            <div id="auth-mode-toggle" style="text-align:center;margin-top:0.875rem;font-size:0.8125rem;">
+              <span id="auth-mode-question" style="color:var(--tertiary);">Belum memiliki akun?</span>
+              <a href="javascript:void(0)" id="auth-mode-link" onclick="toggleAuthMode()" style="color:var(--primary);font-weight:600;margin-left:0.25rem;text-decoration:none;">Daftar Akun Baru</a>
+            </div>
             <p id="login-hint-text" style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
               Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.
             </p>
@@ -182,12 +190,45 @@
     loginEl.style.display = 'flex';
   }
 
+  function toggleAuthMode() {
+    AppState.authMode = (AppState.authMode === 'register') ? 'login' : 'register';
+    const isRegister = AppState.authMode === 'register';
+    const nameGroup = document.getElementById('register-name-group');
+    const nameInput = document.getElementById('register-name');
+    const question = document.getElementById('auth-mode-question');
+    const link = document.getElementById('auth-mode-link');
+    const btnText = document.getElementById('login-btn-text');
+    const target = AppState.activeLoginTab || 'student';
+
+    if (nameGroup) nameGroup.style.display = isRegister ? 'block' : 'none';
+    if (nameInput) nameInput.required = isRegister;
+
+    if (isRegister) {
+      if (question) question.textContent = 'Sudah memiliki akun?';
+      if (link) link.textContent = 'Masuk di sini';
+      if (btnText) {
+        if (target === 'student') btnText.textContent = 'Daftar Akun Peserta Didik';
+        else if (target === 'educator') btnText.textContent = 'Daftar Akun Tutor';
+        else btnText.textContent = 'Daftar Akun Administrator';
+      }
+    } else {
+      if (question) question.textContent = 'Belum memiliki akun?';
+      if (link) link.textContent = 'Daftar Akun Baru';
+      if (btnText) {
+        if (target === 'student') btnText.textContent = 'Masuk sebagai Peserta Didik';
+        else if (target === 'educator') btnText.textContent = 'Masuk sebagai Tutor';
+        else btnText.textContent = 'Masuk sebagai Administrator';
+      }
+    }
+  }
+
   function switchLoginRole(role) {
     let target = 'student';
     if (role === 'tutor' || role === 'educator' || role === 'guru' || role === 'dosen') target = 'educator';
     else if (role === 'admin' || role === 'administrator') target = 'admin';
 
     AppState.activeLoginTab = target;
+    AppState.authMode = 'login';
 
     const tabPeserta = document.getElementById('tab-btn-peserta');
     const tabTutor = document.getElementById('tab-btn-tutor');
@@ -199,7 +240,13 @@
     const btnText = document.getElementById('login-btn-text');
     const hintText = document.getElementById('login-hint-text');
     const googleBtnText = document.getElementById('login-google-text');
+    const nameGroup = document.getElementById('register-name-group');
+    const question = document.getElementById('auth-mode-question');
+    const link = document.getElementById('auth-mode-link');
 
+    if (nameGroup) nameGroup.style.display = 'none';
+    if (question) question.textContent = 'Belum memiliki akun?';
+    if (link) link.textContent = 'Daftar Akun Baru';
     if (errEl) errEl.style.display = 'none';
     if (succEl) succEl.style.display = 'none';
 
@@ -258,11 +305,7 @@
     const { data, error } = await sb.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: redirectUrl,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'select_account'
-        }
+        redirectTo: redirectUrl
       }
     });
 
@@ -277,8 +320,93 @@
     }
   }
 
-  async function handleLogin(e) {
+  async function handleAuthSubmit(e) {
     e.preventDefault();
+    if (AppState.authMode === 'register') {
+      await handleRegister(e);
+    } else {
+      await handleLogin(e);
+    }
+  }
+
+  async function handleRegister(e) {
+    const name = document.getElementById('register-name').value.trim();
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const btn = document.getElementById('login-submit-btn');
+    const btnText = document.getElementById('login-btn-text');
+    const originalText = btnText ? btnText.textContent : 'Daftar';
+    const targetRole = AppState.activeLoginTab || 'student';
+
+    if (!name) {
+      showLoginError('Mohon isi nama lengkap Anda.');
+      return;
+    }
+    if (password.length < 6) {
+      showLoginError('Password minimal 6 karakter.');
+      return;
+    }
+
+    btn.disabled = true;
+    if (btnText) btnText.textContent = 'Mendaftarkan...';
+
+    const sb = getSupabase();
+    if (!sb) {
+      showLoginError('Koneksi Supabase tidak tersedia.');
+      btn.disabled = false;
+      if (btnText) btnText.textContent = originalText;
+      return;
+    }
+
+    try {
+      const { data: authData, error: authErr } = await sb.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name, role: targetRole }
+        }
+      });
+
+      if (authErr) throw authErr;
+
+      const authUserId = authData?.user?.id;
+      const { data: existingProfile } = await sb.from('profiles').select('id').eq('email', email).single();
+
+      if (!existingProfile) {
+        const newProfile = {
+          id: authUserId || createUUID(),
+          name,
+          email,
+          role: targetRole,
+          subject: targetRole === 'educator' ? 'Bahasa Arab' : (targetRole === 'admin' ? 'Administrator Pusat' : 'Umum'),
+          class_name: targetRole === 'educator' ? 'Guru Pengampu' : (targetRole === 'admin' ? 'Pusat Institusi' : 'Kelas Terbuka'),
+          status: 'Aktif'
+        };
+        if (authUserId) newProfile.auth_user_id = authUserId;
+        await sb.from('profiles').insert([newProfile]);
+      } else if (authUserId) {
+        await sb.from('profiles').update({ auth_user_id: authUserId }).eq('id', existingProfile.id);
+      }
+
+      if (authData?.session) {
+        await handleSessionStart(authData.session.user);
+      } else {
+        const succEl = document.getElementById('login-success');
+        if (succEl) {
+          succEl.textContent = '🎉 Pendaftaran berhasil! Silakan masuk dengan email dan password Anda.';
+          succEl.style.display = 'block';
+        }
+        toggleAuthMode();
+      }
+    } catch (err) {
+      showLoginError('Pendaftaran gagal: ' + (err.message || 'Periksa kembali data Anda.'));
+    } finally {
+      btn.disabled = false;
+      if (btnText) btnText.textContent = originalText;
+    }
+  }
+
+  async function handleLogin(e) {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
     const btn = document.getElementById('login-submit-btn');
@@ -299,7 +427,11 @@
 
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) {
-      showLoginError('Email atau password salah. ' + (error.message || ''));
+      let msg = error.message || '';
+      if (msg.includes('Invalid login credentials')) {
+        msg = 'Email atau password salah. Jika Anda mendaftar melalui akun Google, silakan gunakan tombol "Masuk dengan Google".';
+      }
+      showLoginError(msg);
       btn.disabled = false;
       btn.innerHTML = loginBtnOriginal;
     }
@@ -314,7 +446,6 @@
     const savedIntent = localStorage.getItem('coursehub_login_role_intent');
     if (savedIntent) {
       AppState.activeLoginTab = savedIntent;
-      localStorage.removeItem('coursehub_login_role_intent');
     }
     const activeTab = AppState.activeLoginTab || 'student';
 
@@ -479,6 +610,7 @@
     const loginEl = document.getElementById('login-overlay');
     if (loginEl) loginEl.style.display = 'none';
     document.getElementById('app-root').style.display = 'flex';
+    localStorage.removeItem('coursehub_login_role_intent');
     // Bersihkan hash token dari address bar agar rapi & aman
     if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('error='))) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -486,6 +618,7 @@
   }
 
   function showLoginError(msg) {
+    localStorage.removeItem('coursehub_login_role_intent');
     const el = document.getElementById('login-error');
     if (el) { el.textContent = msg; el.style.display = 'block'; }
     const btn = document.getElementById('login-submit-btn');
@@ -646,9 +779,9 @@
       contents:course_contents(id, title, type, duration, embed_url, content_body, order_index, module_id, section_name, quiz_data, passing_score)
     `).order('created_at', { ascending: false });
 
-    // Educator hanya lihat course miliknya sendiri (kecuali admin & demo)
+    // Educator melihat course miliknya atau yang author_id belum di-assign
     if (AppState.currentRole === 'educator' && !AppState.isDemoMode && AppState.user) {
-      query = query.eq('author_id', AppState.user.id);
+      query = query.or(`author_id.eq.${AppState.user.id},author_id.is.null`);
     }
 
     let { data, error } = await query;
@@ -4690,23 +4823,8 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
       let newStudentId = 'DEMO-' + Date.now();
 
       if (sb && !AppState.isDemoMode) {
-        // 1. Buatkan akun login di Supabase Auth untuk siswa ini
-        let authUserId = null;
-        try {
-          const { data: authData, error: authErr } = await sb.auth.signUp({
-            email,
-            password,
-            options: {
-              data: { name, role: 'student', class_name: cls }
-            }
-          });
-          if (authData?.user) authUserId = authData.user.id;
-        } catch (authEx) {
-          console.warn('Auth create warning for student:', authEx);
-        }
-
-        // 2. Simpan profil ke public.profiles
-        const studentProfileId = authUserId || createUUID();
+        // Simpan profil langsung ke public.profiles
+        const studentProfileId = createUUID();
         const profilePayload = {
           id: studentProfileId,
           name,
@@ -4716,16 +4834,16 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
           class_name: cls,
           status: 'Aktif'
         };
-        if (authUserId) profilePayload.auth_user_id = authUserId;
 
         const { data, error } = await sb.from('profiles').insert([profilePayload]).select().single();
-
         if (error) throw error;
         newStudentId = data.id;
 
-        // 3. Daftarkan ke course jika dipilih
-        if (courseId) await dbEnrollStudent(courseId, newStudentId);
-        showToast(`✅ Akun siswa "${name}" berhasil dibuat! Password: ${password}`, 'success');
+        // Daftarkan ke course jika dipilih
+        if (courseId) {
+          await dbEnrollStudent(courseId, newStudentId);
+        }
+        showToast(`✅ Data siswa "${name}" (${email}) berhasil didaftarkan!`, 'success');
       } else {
         showToast(`✅ Siswa "${name}" ditambahkan (mode demo).`, 'success');
       }
@@ -5010,12 +5128,12 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
       `<option value="${s.id}">${escHtml(s.name)} (${escHtml(s.class)})</option>`
     ).join('');
 
-    document.getElementById('modal-title').textContent = `Enrollment: ${course?.title || ''}`;
+    document.getElementById('modal-title').textContent = `Daftarkan Siswa: ${course?.title || ''}`;
     document.getElementById('modal-content').innerHTML = `
-      <p style="margin-bottom:1rem;color:var(--tertiary);">Daftarkan siswa ke course ini secara langsung.</p>
+      <p style="margin-bottom:1rem;color:var(--tertiary);">Pilih siswa yang akan didaftarkan ke course ini secara langsung.</p>
       <div class="form-group">
         <label class="form-label">Pilih Siswa</label>
-        <select id="enroll-student-select" class="form-control">
+        <select id="enroll-student-select" class="form-control" required>
           <option value="">— Pilih Siswa —</option>
           ${studentOptions}
         </select>
@@ -5026,23 +5144,27 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     document.getElementById('modal-action-btn').onclick = async () => {
       const studentId = document.getElementById('enroll-student-select').value;
       const student = AppState.students.find(s => s.id === studentId);
-      if (studentId && student) {
-        await handleEnrollStudent({ preventDefault: () => {} }, studentId, student.name);
-        // Fake submit — patch select value
-        const el = document.getElementById('enroll-course');
-        if (!el) {
-          // Direct enroll without sub-form
-          try {
-            const sb = getSupabase();
-            if (sb && !AppState.isDemoMode) await dbEnrollStudent(courseId, studentId);
-            AppState.enrollments[courseId] = (AppState.enrollments[courseId] || 0) + 1;
-            if (course) course.enrolledStudents = AppState.enrollments[courseId];
-            showToast(`✅ ${student.name} didaftarkan!`, 'success');
-          } catch(err) { showToast('Gagal: ' + err.message, 'error'); }
-          closeModal();
-        }
-      } else {
+      if (!studentId || !student) {
         showToast('Pilih siswa terlebih dahulu.', 'error');
+        return;
+      }
+
+      setModalLoading(true, 'Mendaftarkan...');
+      try {
+        const sb = getSupabase();
+        if (sb && !AppState.isDemoMode) {
+          await dbEnrollStudent(courseId, studentId);
+        }
+        AppState.enrollments[courseId] = (AppState.enrollments[courseId] || 0) + 1;
+        if (course) course.enrolledStudents = AppState.enrollments[courseId];
+        showToast(`✅ ${student.name} berhasil didaftarkan ke course "${course?.title || ''}"!`, 'success');
+        closeModal();
+        if (AppState.currentRole === 'educator') renderEducatorDashboard(document.getElementById('view-container'));
+        else if (AppState.currentRole === 'admin') renderAdminCourses(document.getElementById('view-container'));
+      } catch (err) {
+        showToast('❌ Gagal daftarkan siswa: ' + err.message, 'error');
+      } finally {
+        setModalLoading(false, 'Daftarkan ke Course');
       }
     };
     document.getElementById('global-modal').classList.add('active');
