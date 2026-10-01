@@ -127,13 +127,13 @@
           <!-- Tab Switcher: Peserta Didik vs Tutor vs Administrator -->
           <div class="auth-tabs">
             <button type="button" class="auth-tab-btn active" id="tab-btn-peserta" onclick="switchLoginRole('student')">
-              <span style="margin-right:.375rem;">🎓</span> Peserta Didik
+              Peserta Didik
             </button>
             <button type="button" class="auth-tab-btn" id="tab-btn-tutor" onclick="switchLoginRole('educator')">
-              <span style="margin-right:.375rem;">👨‍🏫</span> Tutor
+              Tutor
             </button>
             <button type="button" class="auth-tab-btn" id="tab-btn-admin" onclick="switchLoginRole('admin')">
-              <span style="margin-right:.375rem;">⚙️</span> Admin
+              Admin
             </button>
           </div>
 
@@ -169,7 +169,6 @@
               </div>
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
-              <span id="login-btn-icon" style="margin-right:.375rem;">🎓</span>
               <span id="login-btn-text">Masuk sebagai Peserta Didik</span>
             </button>
             <p id="login-hint-text" style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
@@ -197,7 +196,6 @@
     const succEl = document.getElementById('login-success');
     const emailLabel = document.getElementById('login-email-label');
     const emailInput = document.getElementById('login-email');
-    const btnIcon = document.getElementById('login-btn-icon');
     const btnText = document.getElementById('login-btn-text');
     const hintText = document.getElementById('login-hint-text');
     const googleBtnText = document.getElementById('login-google-text');
@@ -212,21 +210,18 @@
     if (target === 'student') {
       if (emailLabel) emailLabel.textContent = 'Email Peserta Didik';
       if (emailInput) emailInput.placeholder = 'contoh: siswa@institusi.ac.id';
-      if (btnIcon) btnIcon.textContent = '🎓';
       if (btnText) btnText.textContent = 'Masuk sebagai Peserta Didik';
       if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Siswa dengan Google';
       if (hintText) hintText.textContent = 'Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.';
     } else if (target === 'educator') {
       if (emailLabel) emailLabel.textContent = 'Email Tutor Pengampu';
       if (emailInput) emailInput.placeholder = 'contoh: tutor@institusi.ac.id';
-      if (btnIcon) btnIcon.textContent = '👨‍🏫';
       if (btnText) btnText.textContent = 'Masuk sebagai Tutor';
       if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Tutor dengan Google';
       if (hintText) hintText.textContent = 'Portal khusus Tutor Pengampu. Masuk untuk mengelola materi, jadwal Zoom, dan verifikasi kelulusan tema.';
     } else if (target === 'admin') {
       if (emailLabel) emailLabel.textContent = 'Email Administrator';
       if (emailInput) emailInput.placeholder = 'contoh: admin@institusi.ac.id';
-      if (btnIcon) btnIcon.textContent = '⚙️';
       if (btnText) btnText.textContent = 'Masuk sebagai Administrator';
       if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Admin dengan Google';
       if (hintText) hintText.textContent = 'Portal Administrator Pusat Institusi. Akses pengaturan sistem, data pengguna, dan seluruh kurikulum.';
@@ -443,9 +438,9 @@
     if (btn) {
       btn.disabled = false;
       const target = AppState.activeLoginTab || 'student';
-      if (target === 'student') btn.innerHTML = '<span id="login-btn-icon" style="margin-right:.375rem;">🎓</span><span id="login-btn-text">Masuk sebagai Peserta Didik</span>';
-      else if (target === 'educator') btn.innerHTML = '<span id="login-btn-icon" style="margin-right:.375rem;">👨‍🏫</span><span id="login-btn-text">Masuk sebagai Tutor</span>';
-      else btn.innerHTML = '<span id="login-btn-icon" style="margin-right:.375rem;">⚙️</span><span id="login-btn-text">Masuk sebagai Administrator</span>';
+      if (target === 'student') btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Peserta Didik</span>';
+      else if (target === 'educator') btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Tutor</span>';
+      else btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Administrator</span>';
     }
   }
 
