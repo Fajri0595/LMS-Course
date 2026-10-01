@@ -26,6 +26,7 @@
     // Submisi Tugas Google Drive & Booking Sesi Zoom
     submissions: [],          // [ { id, course_id, module_id, content_id, student_id, student_name, tutor_id, tutor_name, type, drive_url, student_notes, zoom_url, zoom_meeting_time, schedule_status, approval_status, score, tutor_feedback, submitted_at, reviewed_at } ]
     activeApprovalTab: 'all', // 'all' | 'drive' | 'zoom'
+    activeLoginTab: 'student',// 'student' | 'educator' | 'admin'
     // Player & Hierarchical Curriculum state
     activeCoursePlayer: null,
     activeUnitIndex: 0,
@@ -108,24 +109,27 @@
             </div>
           </div>
 
-          <!-- Tab Switcher: Peserta Didik vs Tutor -->
+          <!-- Tab Switcher: Peserta Didik vs Tutor vs Administrator -->
           <div class="auth-tabs">
-            <button type="button" class="auth-tab-btn active" id="tab-btn-peserta" onclick="switchLoginRole('peserta')">
+            <button type="button" class="auth-tab-btn active" id="tab-btn-peserta" onclick="switchLoginRole('student')">
               <span style="margin-right:.375rem;">🎓</span> Peserta Didik
             </button>
-            <button type="button" class="auth-tab-btn" id="tab-btn-tutor" onclick="switchLoginRole('tutor')">
+            <button type="button" class="auth-tab-btn" id="tab-btn-tutor" onclick="switchLoginRole('educator')">
               <span style="margin-right:.375rem;">👨‍🏫</span> Tutor
+            </button>
+            <button type="button" class="auth-tab-btn" id="tab-btn-admin" onclick="switchLoginRole('admin')">
+              <span style="margin-right:.375rem;">⚙️</span> Admin
             </button>
           </div>
 
           <div id="login-error" class="login-error" style="display:none;"></div>
           <div id="login-success" class="login-success" style="display:none;"></div>
 
-          <!-- FORM LOGIN (Peserta Didik & Tutor — dibedakan secara visual) -->
+          <!-- FORM LOGIN (Peserta Didik, Tutor & Admin — dibedakan secara visual) -->
           <form id="form-login" onsubmit="handleLogin(event)">
             <div class="form-group">
               <label class="form-label" id="login-email-label">Email Peserta Didik</label>
-              <input type="email" id="login-email" class="form-control" placeholder="contoh: nama@peserta.sch.id" required autocomplete="email">
+              <input type="email" id="login-email" class="form-control" placeholder="contoh: annisa.n@siswa.institusi.sch.id" required autocomplete="email">
             </div>
             <div class="form-group">
               <label class="form-label">Password</label>
@@ -139,9 +143,21 @@
               <span id="login-btn-text">Masuk sebagai Peserta Didik</span>
             </button>
             <p id="login-hint-text" style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
-              Akun peserta didik didaftarkan oleh tutor pengampu masing-masing kelas.
+              Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.
             </p>
           </form>
+
+          <!-- Quick Demo Shortcut (IFP Presentasi) -->
+          <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px dashed var(--border);text-align:center;">
+            <div style="font-size:0.75rem;font-weight:600;color:var(--tertiary);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.5px;">
+              ⚡ Akses Demonstrasi Cepat (Tanpa Password)
+            </div>
+            <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+              <button type="button" class="btn btn-outline btn-sm" onclick="enterDemoMode('student')">🎓 Demo Siswa</button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="enterDemoMode('educator')">👨‍🏫 Demo Tutor</button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="enterDemoMode('admin')">⚙️ Demo Admin</button>
+            </div>
+          </div>
 
         </div>
       </div>
@@ -150,9 +166,15 @@
   }
 
   function switchLoginRole(role) {
-    const isPeserta = role === 'peserta' || role === 'mahasiswa';
-    const tabPeserta = document.getElementById('tab-btn-peserta') || document.getElementById('tab-btn-mahasiswa');
-    const tabTutor = document.getElementById('tab-btn-tutor') || document.getElementById('tab-btn-dosen');
+    let target = 'student';
+    if (role === 'tutor' || role === 'educator' || role === 'guru' || role === 'dosen') target = 'educator';
+    else if (role === 'admin' || role === 'administrator') target = 'admin';
+
+    AppState.activeLoginTab = target;
+
+    const tabPeserta = document.getElementById('tab-btn-peserta');
+    const tabTutor = document.getElementById('tab-btn-tutor');
+    const tabAdmin = document.getElementById('tab-btn-admin');
     const errEl = document.getElementById('login-error');
     const succEl = document.getElementById('login-success');
     const emailLabel = document.getElementById('login-email-label');
@@ -164,22 +186,28 @@
     if (errEl) errEl.style.display = 'none';
     if (succEl) succEl.style.display = 'none';
 
-    if (isPeserta) {
-      if (tabPeserta) tabPeserta.classList.add('active');
-      if (tabTutor) tabTutor.classList.remove('active');
+    if (tabPeserta) tabPeserta.classList.toggle('active', target === 'student');
+    if (tabTutor) tabTutor.classList.toggle('active', target === 'educator');
+    if (tabAdmin) tabAdmin.classList.toggle('active', target === 'admin');
+
+    if (target === 'student') {
       if (emailLabel) emailLabel.textContent = 'Email Peserta Didik';
-      if (emailInput) emailInput.placeholder = 'contoh: nama@peserta.sch.id';
+      if (emailInput) emailInput.placeholder = 'contoh: annisa.n@siswa.institusi.sch.id';
       if (btnIcon) btnIcon.textContent = '🎓';
       if (btnText) btnText.textContent = 'Masuk sebagai Peserta Didik';
-      if (hintText) hintText.textContent = 'Akun peserta didik didaftarkan oleh tutor pengampu masing-masing kelas.';
-    } else {
-      if (tabPeserta) tabPeserta.classList.remove('active');
-      if (tabTutor) tabTutor.classList.add('active');
-      if (emailLabel) emailLabel.textContent = 'Email Tutor';
-      if (emailInput) emailInput.placeholder = 'contoh: tutor@institusi.sch.id';
+      if (hintText) hintText.textContent = 'Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.';
+    } else if (target === 'educator') {
+      if (emailLabel) emailLabel.textContent = 'Email Tutor Pengampu';
+      if (emailInput) emailInput.placeholder = 'contoh: syarif@institusi.sch.id';
       if (btnIcon) btnIcon.textContent = '👨‍🏫';
       if (btnText) btnText.textContent = 'Masuk sebagai Tutor';
-      if (hintText) hintText.textContent = 'Gunakan email dan password tutor yang sudah terdaftar di sistem.';
+      if (hintText) hintText.textContent = 'Portal khusus Tutor Pengampu. Masuk untuk mengelola materi, jadwal Zoom, dan verifikasi kelulusan tema.';
+    } else if (target === 'admin') {
+      if (emailLabel) emailLabel.textContent = 'Email Administrator';
+      if (emailInput) emailInput.placeholder = 'contoh: admin@institusi.sch.id';
+      if (btnIcon) btnIcon.textContent = '⚙️';
+      if (btnText) btnText.textContent = 'Masuk sebagai Administrator';
+      if (hintText) hintText.textContent = 'Portal Administrator Pusat Institusi. Akses pengaturan sistem, data pengguna, dan seluruh kurikulum.';
     }
   }
 
@@ -245,6 +273,39 @@
       AppState.user = profile;
     }
 
+    // =========================================================
+    // VALIDASI PERAN LOGIN KETAT (Strict Portal Role Segregation)
+    // =========================================================
+    const activeTab = AppState.activeLoginTab || 'student';
+    const userRole = (AppState.user?.role || '').toLowerCase();
+
+    // 1. Batasi jika akun peserta login di sisi tutor
+    if (activeTab === 'educator' && userRole === 'student') {
+      showLoginError('⛔ Akses Ditolak: Akun Anda terdaftar sebagai Peserta Didik dan tidak diizinkan masuk melalui Portal Tutor. Silakan klik tab "Peserta Didik".');
+      await sb.auth.signOut();
+      AppState.user = null;
+      AppState.authUser = null;
+      return;
+    }
+
+    // 2. Batasi jika akun peserta atau tutor login di sisi administrator
+    if (activeTab === 'admin' && userRole !== 'admin') {
+      showLoginError('⛔ Akses Ditolak: Akun Anda tidak memiliki hak akses sebagai Administrator Institusi.');
+      await sb.auth.signOut();
+      AppState.user = null;
+      AppState.authUser = null;
+      return;
+    }
+
+    // 3. Batasi jika akun tutor login di sisi peserta didik
+    if (activeTab === 'student' && userRole === 'educator') {
+      showLoginError('⛔ Akses Ditolak: Akun Anda terdaftar sebagai Tutor Pengampu. Silakan gunakan tab "Tutor" untuk masuk.');
+      await sb.auth.signOut();
+      AppState.user = null;
+      AppState.authUser = null;
+      return;
+    }
+
     hideLoginPage();
     await initApp();
   }
@@ -266,6 +327,14 @@
   function showLoginError(msg) {
     const el = document.getElementById('login-error');
     if (el) { el.textContent = msg; el.style.display = 'block'; }
+    const btn = document.getElementById('login-submit-btn');
+    if (btn) {
+      btn.disabled = false;
+      const target = AppState.activeLoginTab || 'student';
+      if (target === 'student') btn.innerHTML = '<span id="login-btn-icon" style="margin-right:.375rem;">🎓</span><span id="login-btn-text">Masuk sebagai Peserta Didik</span>';
+      else if (target === 'educator') btn.innerHTML = '<span id="login-btn-icon" style="margin-right:.375rem;">👨‍🏫</span><span id="login-btn-text">Masuk sebagai Tutor</span>';
+      else btn.innerHTML = '<span id="login-btn-icon" style="margin-right:.375rem;">⚙️</span><span id="login-btn-text">Masuk sebagai Administrator</span>';
+    }
   }
 
   function togglePasswordVis(inputId = 'login-password') {
