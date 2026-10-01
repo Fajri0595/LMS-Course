@@ -1353,7 +1353,7 @@
       background: #ffffff;
     }
     .btn-next-action {
-      padding: 0.6rem 1.75rem;
+      padding: 0.65rem 1.75rem;
       border-radius: 8px;
       font-size: 0.9375rem;
       font-weight: 600;
@@ -1361,16 +1361,65 @@
       color: #1e293b;
       border: 1.5px solid #cbd5e1;
       cursor: pointer;
-      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .btn-next-action:hover:not(:disabled) {
       border-color: #14b8a6;
       color: #0f766e;
       background: #f0fdfa;
+      transform: translateY(-1px);
     }
-    .btn-next-action:disabled {
-      opacity: 0.45;
+    .btn-next-action:disabled,
+    .btn-next-action.locked {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+      color: #64748b;
+      opacity: 0.85;
       cursor: not-allowed;
+      box-shadow: none;
+    }
+    .btn-next-action.ready {
+      background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+      color: #ffffff;
+      border: 1.5px solid transparent;
+      box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
+      cursor: pointer;
+      animation: pulseReady 2.2s infinite ease-in-out;
+    }
+    .btn-next-action.ready:hover {
+      background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+      color: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(20, 184, 166, 0.45);
+    }
+
+    @keyframes pulseReady {
+      0%, 100% {
+        box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
+      }
+      50% {
+        box-shadow: 0 6px 20px rgba(20, 184, 166, 0.6);
+      }
+    }
+
+    .chapter-duration-badge {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--tertiary);
+      background: #f1f5f9;
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      white-space: nowrap;
+    }
+    .player-chapter-header:hover .chapter-duration-badge {
+      background: #e2e8f0;
     }
 
     /* Dukungan Karakter & Tipografi Arab / RTL / Harakat */
@@ -2755,6 +2804,9 @@
       if (root) root.style.display = 'none';
     });
   </script>
+
+  <!-- YouTube IFrame Player API for video watch tracking -->
+  <script src="https://www.youtube.com/iframe_api"></script>
 
   <!-- Full-Stack Application Logic -->
   <script src="app.js"></script>

@@ -1767,6 +1767,33 @@
   }
 
   // 6. Course Player (Hierarchical Multi-Level Curriculum)
+  function parseDurationSeconds(durStr, contentBody = '') {
+    if (durStr && typeof durStr === 'string') {
+      const str = durStr.toLowerCase();
+      const match = str.match(/\d+(\.\d+)?/);
+      if (match) {
+        const val = parseFloat(match[0]);
+        if (str.includes('detik') || str.includes('sec')) {
+          return Math.max(5, Math.round(val));
+        }
+        if (str.includes('jam') || str.includes('hour')) {
+          return Math.max(60, Math.round(val * 3600));
+        }
+        return Math.max(10, Math.round(val * 60));
+      }
+    }
+    // Estimasi cerdas jika durasi belum diisi: hitung kata bacaan (180 kata/menit)
+    if (contentBody && typeof contentBody === 'string') {
+      const cleanText = contentBody.replace(/<[^>]*>/g, ' ').trim();
+      const wordCount = cleanText.split(/\s+/).filter(Boolean).length;
+      if (wordCount > 10) {
+        const estimatedSeconds = Math.round((wordCount / 180) * 60);
+        return Math.max(30, estimatedSeconds);
+      }
+    }
+    return 60; // 1 menit default
+  }
+
   function renderCoursePlayer(container, courseId) {
     const course = AppState.courses.find(c => c.id === courseId) || AppState.courses[0];
     if (!course) {
@@ -1798,7 +1825,7 @@
 
     const completedCount = course.contents.filter(u => u.completed).length;
     const progressPercent = course.contents.length > 0 ? Math.round((completedCount / course.contents.length) * 100) : 0;
-    const isStudent = AppState.currentRole === 'student';
+    const isStudent = AppState.currentRole === 'student' || AppState.isSimulatingStudent;
 
     // 1. Identifikasi & Pengelompokan Unit (Pre-Exam, Bab Accordion, Post-Course)
     let preExamIdx = course.contents.findIndex(u => (u.type || '').toLowerCase() === 'pre_exam' || u.title.toLowerCase().includes('pre-exam') || u.title.toLowerCase().includes('pretest'));
@@ -1866,6 +1893,12 @@
       const isExpanded = AppState.expandedChapters[chTitle] !== false;
       const hasActive = subItems.some(item => item.idx === AppState.activeUnitIndex);
 
+      let totalChapterSec = 0;
+      subItems.forEach(({ unit: u }) => {
+        totalChapterSec += parseDurationSeconds(u.duration, u.contentBody);
+      });
+      const totalChapterMin = Math.max(1, Math.round(totalChapterSec / 60));
+
       let chStatusIcon = '';
       let chStatusClass = '';
       if (allCompleted) {
@@ -1886,6 +1919,8 @@
         const typeLower = (u.type || '').toLowerCase();
         if (typeLower === 'video') icon = '▶';
         else if (typeLower === 'kuis_popup' || typeLower === 'kuis' || u.title.toLowerCase().includes('kuis')) icon = '📋';
+        else if (typeLower === 'tugas_drive') icon = '📁';
+        else if (typeLower === 'tugas_zoom') icon = '📹';
         else if (typeLower === 'tugas') icon = '✏️';
 
         const subStatusIcon = u.completed ? '✓' : (isLocked ? '🔒' : (isActive ? '●' : ''));
@@ -1912,7 +1947,8 @@
             <div class="player-status-circle ${chStatusClass}" style="flex-shrink:0;">
               ${chStatusIcon}
             </div>
-            <div class="player-chapter-title">${escHtml(chTitle)}</div>
+            <div class="player-chapter-title" style="flex:1;min-width:0;">${escHtml(chTitle)}</div>
+            <span class="chapter-duration-badge" title="Total estimasi waktu menyelesaikan tema ini">⏱️ ~${totalChapterMin}m</span>
             <div class="player-chapter-chevron" style="transform:${isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'};transition:transform 0.25s ease;">▼</div>
           </div>
           <div class="player-chapter-body">
@@ -2398,7 +2434,7 @@
         if (isDirectVideo && !isYoutube) {
           contentHtml = `
             <div class="video-player-container">
-              <div class="video-lock-badge">🔒 Kecepatan Terkunci (1.0x Normal)</div>
+              <div class="video-lock-badge">🔒 Kecepatan Terkunci (1.0x Normal • Anti-Skip)</div>
               <video id="lms-custom-video" controls controlsList="nodownload noplaybackrate" disablePictureInPicture src="${currentUnit.embedUrl}">
                 Browser Anda tidak mendukung tag video HTML5.
               </video>
@@ -2406,10 +2442,17 @@
             ${currentUnit.contentBody ? `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody}</div>` : ''}
           `;
         } else if (isYoutube) {
-          const embedSrc = currentUnit.embedUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'www.youtube-nocookie.com/embed/');
+          const ytMatch = currentUnit.embedUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+          const ytId = ytMatch ? ytMatch[1] : '';
+          const embedOrigin = encodeURIComponent(window.location.origin || 'http://localhost:3000');
+          const embedSrc = ytId
+            ? `https://www.youtube-nocookie.com/embed/${ytId}?enablejsapi=1&origin=${embedOrigin}&rel=0&modestbranding=1`
+            : currentUnit.embedUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'www.youtube-nocookie.com/embed/');
+
           contentHtml = `
-            <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin-bottom:1.5rem;background:#000;">
-              <iframe src="${embedSrc}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+            <div class="video-player-container" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin-bottom:1.5rem;background:#000;">
+              <div class="video-lock-badge">🔒 Tonton Video Hingga Selesai untuk Melanjutkan</div>
+              <iframe id="lms-youtube-iframe" src="${embedSrc}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
             </div>
             ${currentUnit.contentBody ? `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody}</div>` : ''}
           `;
@@ -2421,29 +2464,26 @@
 
     // Timer badge untuk materi teks / video
     let timerWidgetHtml = '';
-    const isVideoUnit = typeLower === 'video' || (currentUnit.embedUrl && (currentUnit.embedUrl.endsWith('.mp4') || currentUnit.embedUrl.includes('/storage/v1/object/public/')));
-    const parseDurationSeconds = (durStr) => {
-      if (!durStr) return 60;
-      const match = durStr.match(/\d+/);
-      const val = match ? parseInt(match[0], 10) : 5;
-      return Math.max(30, val * 60);
-    };
-    const targetSeconds = parseDurationSeconds(currentUnit.duration);
+    const isVideoUnit = typeLower === 'video' || (currentUnit.embedUrl && (currentUnit.embedUrl.endsWith('.mp4') || currentUnit.embedUrl.includes('youtube') || currentUnit.embedUrl.includes('youtu.be') || currentUnit.embedUrl.includes('/storage/v1/object/public/')));
+    const targetSeconds = parseDurationSeconds(currentUnit.duration, currentUnit.contentBody);
 
     if (isStudent && !isCompleted && !isQuizUnit) {
       if (isVideoUnit) {
         timerWidgetHtml = `
-          <div class="study-timer-badge" id="study-timer-display" title="Tonton video hingga selesai untuk membuka sesi berikutnya">
-            <span>📺</span>
-            <span id="study-timer-text">Tonton hingga selesai</span>
+          <div class="study-timer-badge video-timer" id="study-timer-display" title="Tonton video pembelajaran ini hingga tuntas">
+            <span>🎥</span>
+            <div class="study-timer-bar"><div class="study-timer-fill" id="study-timer-progress" style="width:0%;"></div></div>
+            <span id="study-timer-text">Memuat video...</span>
           </div>
         `;
       } else {
+        const remM = Math.floor(targetSeconds / 60);
+        const remS = targetSeconds % 60;
         timerWidgetHtml = `
-          <div class="study-timer-badge" id="study-timer-display" title="Mempelajari materi ini untuk membuka sesi berikutnya">
+          <div class="study-timer-badge text-timer" id="study-timer-display" title="Estimasi waktu membaca materi ini untuk membuka sesi berikutnya">
             <span>⏱️</span>
             <div class="study-timer-bar"><div class="study-timer-fill" id="study-timer-progress" style="width:0%;"></div></div>
-            <span id="study-timer-text">Menghitung...</span>
+            <span id="study-timer-text">${remM}:${remS < 10 ? '0' : ''}${remS} tersisa</span>
           </div>
         `;
       }
@@ -2453,6 +2493,52 @@
           <span>✓</span>
           <span>Selesai Dipelajari</span>
         </div>
+      `;
+    }
+
+    // Tombol Selanjutnya / Next Action State
+    let nextBtnDisabled = false;
+    let nextBtnClass = 'btn-next-action';
+    let nextBtnHtml = '<span>Selanjutnya →</span>';
+
+    if (isStudent && !currentUnit.completed) {
+      nextBtnDisabled = true;
+      nextBtnClass = 'btn-next-action locked';
+
+      if (isQuizUnit) {
+        nextBtnHtml = '<span>🔒 Kerjakan & Kumpulkan Kuis Dulu</span>';
+      } else if (typeLower === 'tugas_drive') {
+        const studentId = AppState.user?.id;
+        const sub = (AppState.submissions || []).find(s => s.student_id === studentId && s.content_id === currentUnit.id);
+        if (!sub) {
+          nextBtnHtml = '<span>🔒 Kumpulkan Link Google Drive Dulu</span>';
+        } else if (sub.approval_status === 'pending') {
+          nextBtnHtml = '<span>⏳ Menunggu Persetujuan Tutor</span>';
+        } else if (sub.approval_status === 'rejected') {
+          nextBtnHtml = '<span>⚠️ Perlu Revisi Tugas</span>';
+        }
+      } else if (typeLower === 'tugas_zoom') {
+        nextBtnHtml = '<span>🔒 Jadwalkan & Hadiri Sesi Zoom Dulu</span>';
+      } else if (isVideoUnit) {
+        nextBtnHtml = '<span>🔒 Tonton Video Hingga Selesai</span>';
+      } else {
+        const remM = Math.floor(targetSeconds / 60);
+        const remS = targetSeconds % 60;
+        const durLabel = `${remM}:${remS < 10 ? '0' : ''}${remS}`;
+        nextBtnHtml = `<span>🔒 Membaca Materi (Sisa <strong id="next-btn-countdown">${durLabel}</strong>)</span>`;
+      }
+    } else if (currentUnit.completed) {
+      nextBtnClass = 'btn-next-action ready';
+      nextBtnHtml = '<span>✅ Selesai — Lanjutkan →</span>';
+    }
+
+    // Tutor Simulator Toggle (Hanya untuk Tutor / Admin)
+    let simulationToggleHtml = '';
+    if (AppState.currentRole !== 'student') {
+      simulationToggleHtml = `
+        <button class="btn btn-outline btn-sm" onclick="toggleStudentSimulation()" style="font-size:0.75rem;padding:0.25rem 0.65rem;" title="Simulasikan kunci video dan timer baca persis seperti siswa">
+          ${AppState.isSimulatingStudent ? '🔓 Matikan Simulasi Siswa' : '👁️ Uji Kunci Siswa'}
+        </button>
       `;
     }
 
@@ -2488,24 +2574,26 @@
               <h2 style="font-size:1.2rem;margin:0;" dir="auto">${escHtml(currentUnit.title)}</h2>
               ${timerWidgetHtml}
             </div>
-            <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Mode Layar Penuh IFP">
-              🖥️ Mode IFP
-            </button>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              ${simulationToggleHtml}
+              <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Mode Layar Penuh IFP">
+                🖥️ Mode IFP
+              </button>
+            </div>
           </div>
 
           <div class="player-content-body" id="player-body" dir="auto">
             ${contentHtml}
           </div>
 
-          <!-- Footer Bersih (Persis Gambar 1: Tombol Selanjutnya) -->
+          <!-- Footer Bersih: Tombol Selanjutnya dengan Proteksi Penguncian -->
           <div class="player-content-footer-clean">
             <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
               <button class="btn btn-outline btn-sm" onclick="prevPlayerUnit()" ${AppState.activeUnitIndex === 0 ? 'disabled style="opacity:.4;"' : ''}>
                 ← Sebelumnya
               </button>
-              <button class="btn-next-action" onclick="onNextButtonClicked()" id="btn-player-next" 
-                      ${isStudent && isUnitLocked(AppState.activeUnitIndex + 1, course) && !currentUnit.completed ? 'disabled' : ''}>
-                Selanjutnya
+              <button class="${nextBtnClass}" onclick="onNextButtonClicked()" id="btn-player-next" ${nextBtnDisabled ? 'disabled' : ''}>
+                ${nextBtnHtml}
               </button>
             </div>
           </div>
@@ -2657,8 +2745,8 @@
 
   function isUnitLocked(idx, course) {
     if (!course || !course.contents) return false;
-    // Pendidik dan admin bebas akses
-    if (AppState.currentRole !== 'student') return false;
+    // Pendidik dan admin bebas akses (kecuali mode simulasi siswa aktif)
+    if (AppState.currentRole !== 'student' && !AppState.isSimulatingStudent) return false;
     // Unit pertama (Pre-Exam) selalu terbuka
     if (idx <= 0) return false;
 
@@ -2693,6 +2781,17 @@
     }
 
     return false;
+  }
+
+  function toggleStudentSimulation() {
+    AppState.isSimulatingStudent = !AppState.isSimulatingStudent;
+    showToast(
+      AppState.isSimulatingStudent 
+        ? '🔒 Mode Simulasi Siswa Aktif: Penguncian video & timer baca berlaku persis seperti akun siswa.' 
+        : '🔓 Mode Pendidik Aktif: Penguncian dinonaktifkan (bebas akses).', 
+      'info'
+    );
+    renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
   }
 
   function toggleChapterAccordion(chTitle) {
@@ -2846,13 +2945,39 @@
     const currentUnit = course.contents[AppState.activeUnitIndex];
     if (!currentUnit) return;
 
-    const isQuiz = ['pre_exam', 'kuis_popup', 'post_exam', 'kuis'].includes((currentUnit.type || '').toLowerCase());
-    if (!currentUnit.completed && !isQuiz) {
-      await markUnitComplete(currentUnit.id, course.id);
+    const typeLower = (currentUnit.type || '').toLowerCase();
+    const isQuiz = ['pre_exam', 'kuis_popup', 'post_exam', 'kuis'].includes(typeLower);
+    const isDrive = typeLower === 'tugas_drive';
+    const isZoom = typeLower === 'tugas_zoom';
+    const isVideo = typeLower === 'video' || (currentUnit.embedUrl && (currentUnit.embedUrl.endsWith('.mp4') || currentUnit.embedUrl.includes('youtube') || currentUnit.embedUrl.includes('youtu.be')));
+    const isStudent = AppState.currentRole === 'student' || AppState.isSimulatingStudent;
+
+    // VALIDASI PENGUNCIAN KETAT UNTUK SISWA:
+    if (isStudent && !currentUnit.completed) {
+      if (isQuiz) {
+        showToast('⚠️ Harap kumpulkan jawaban kuis/ujian terlebih dahulu sebelum melanjutkan.', 'warning');
+        return;
+      }
+      if (isDrive) {
+        showToast('🔒 Kumpulkan link Google Drive dan tunggu persetujuan tutor sebelum melanjutkan ke bab berikutnya.', 'warning');
+        return;
+      }
+      if (isZoom) {
+        showToast('🔒 Sesi tatap muka Zoom harus disepakati dan disetujui tutor sebelum membuka bab berikutnya.', 'warning');
+        return;
+      }
+      if (isVideo) {
+        showToast('🔒 Tonton video pembelajaran ini hingga selesai untuk membuka sesi berikutnya.', 'warning');
+        return;
+      }
+      // Materi teks bacaan: belum tuntas durasi baca
+      showToast('🔒 Harap pelajari materi teks ini hingga waktu estimasi belajar tuntas sebelum melanjutkan.', 'warning');
+      return;
     }
 
-    if (!currentUnit.completed && isQuiz) {
-      showToast('⚠️ Harap kumpulkan jawaban kuis/ujian terlebih dahulu sebelum melanjutkan.', 'warning');
+    // Jika Tutor / Admin (bukan mode simulasi), berikan fleksibilitas langsung lanjut
+    if (!isStudent && !currentUnit.completed && !isQuiz) {
+      await markUnitComplete(currentUnit.id, course.id);
       return;
     }
 
@@ -2977,28 +3102,41 @@
 
   // Pengatur Timer Belajar dan Penguncian Video
   let activeStudyInterval = null;
+  let activeYtPlayer = null;
 
   function clearActiveStudyTimer() {
     if (activeStudyInterval) {
       clearInterval(activeStudyInterval);
       activeStudyInterval = null;
     }
+    if (activeYtPlayer) {
+      try {
+        if (typeof activeYtPlayer.destroy === 'function') activeYtPlayer.destroy();
+      } catch (e) {}
+      activeYtPlayer = null;
+    }
   }
 
   function initUnitInteractions(currentUnit, course, targetSeconds, isVideoUnit) {
     clearActiveStudyTimer();
 
+    const isStudent = AppState.currentRole === 'student' || AppState.isSimulatingStudent;
     // Jika bukan siswa atau unit sudah selesai, tidak perlu menghitung / mengunci
-    if (AppState.currentRole !== 'student' || currentUnit.completed) return;
+    if (!isStudent || currentUnit.completed) return;
 
     const videoEl = document.getElementById('lms-custom-video');
+    const ytIframe = document.getElementById('lms-youtube-iframe');
+    const timerText = document.getElementById('study-timer-text');
+    const timerBar = document.getElementById('study-timer-progress');
+    const timerBadge = document.getElementById('study-timer-display');
+    const nextBtn = document.getElementById('btn-player-next');
+    const countdownSpan = document.getElementById('next-btn-countdown');
 
-    // 1. Penguncian Video Player (Opsi 1: Direct HTML5 / Supabase Video)
+    // 1. Penguncian Video HTML5 (MP4 / WebM / Supabase Video)
     if (videoEl) {
       let maxWatchedTime = 0;
-
-      // Kunci kecepatan video permanen ke 1.0x (Normal)
       videoEl.playbackRate = 1.0;
+
       videoEl.addEventListener('ratechange', () => {
         if (videoEl.playbackRate !== 1.0) {
           videoEl.playbackRate = 1.0;
@@ -3006,28 +3144,31 @@
         }
       });
 
-      // Cegah percepat / lompat maju (Anti-Skip Forward)
       videoEl.addEventListener('timeupdate', () => {
         if (videoEl.currentTime > maxWatchedTime + 2.5) {
-          // Lompat ke depan terdeteksi
           videoEl.currentTime = maxWatchedTime;
           showToast('🔒 Anda tidak dapat melompati bagian video yang belum ditonton.', 'warning');
         } else {
           maxWatchedTime = Math.max(maxWatchedTime, videoEl.currentTime);
         }
 
-        // Tampilkan waktu tonton di badge
-        const timerText = document.getElementById('study-timer-text');
-        if (timerText && videoEl.duration) {
+        if (videoEl.duration) {
           const curM = Math.floor(videoEl.currentTime / 60);
           const curS = Math.floor(videoEl.currentTime % 60);
           const durM = Math.floor(videoEl.duration / 60);
           const durS = Math.floor(videoEl.duration % 60);
-          timerText.textContent = `${curM}:${curS < 10 ? '0' : ''}${curS} / ${durM}:${durS < 10 ? '0' : ''}${durS}`;
+          const pct = Math.min(100, Math.round((videoEl.currentTime / videoEl.duration) * 100));
+
+          if (timerText) timerText.textContent = `${curM}:${curS < 10 ? '0' : ''}${curS} / ${durM}:${durS < 10 ? '0' : ''}${durS} (${pct}%)`;
+          if (timerBar) timerBar.style.width = `${pct}%`;
+
+          // Otomatis selesai jika mendekati akhir durasi
+          if (videoEl.currentTime >= videoEl.duration - 0.5 && videoEl.duration > 2) {
+            videoEl.dispatchEvent(new Event('ended'));
+          }
         }
       });
 
-      // Video selesai ditonton sampai tamat -> Otomatis Selesai!
       videoEl.addEventListener('ended', () => {
         showToast('🎉 Selamat! Anda telah menyelesaikan sesi video pembelajaran ini.', 'success');
         markUnitComplete(currentUnit.id, course.id);
@@ -3036,30 +3177,116 @@
       return;
     }
 
-    // 2. Timer Belajar Otomatis untuk Materi Teks / Kaidah / Latihan
+    // 2. Penguncian Video YouTube (Iframe Player API & Smart Watch Tracking)
+    if (ytIframe) {
+      let ytWatchedSeconds = 0;
+      const ytTarget = Math.max(15, targetSeconds);
+
+      // Inisialisasi YouTube Iframe Player API jika tersedia
+      if (window.YT && window.YT.Player) {
+        try {
+          activeYtPlayer = new YT.Player('lms-youtube-iframe', {
+            events: {
+              'onStateChange': (event) => {
+                // YT.PlayerState.ENDED = 0
+                if (event.data === 0) {
+                  clearActiveStudyTimer();
+                  showToast('🎉 Selamat! Anda telah menyaksikan video hingga tuntas.', 'success');
+                  markUnitComplete(currentUnit.id, course.id);
+                }
+              }
+            }
+          });
+        } catch (e) {
+          console.warn('YouTube API init fallback:', e);
+        }
+      }
+
+      // Interval pelacak waktu tonton video aktif
+      activeStudyInterval = setInterval(() => {
+        if (document.hidden) {
+          if (timerBadge && !timerBadge.classList.contains('paused')) {
+            timerBadge.classList.add('paused');
+            if (timerText) timerText.textContent = 'Jeda (Tab Tidak Aktif)';
+          }
+          return;
+        }
+
+        if (timerBadge && timerBadge.classList.contains('paused')) {
+          timerBadge.classList.remove('paused');
+        }
+
+        // Cek progres dari API jika ada
+        if (activeYtPlayer && typeof activeYtPlayer.getCurrentTime === 'function' && typeof activeYtPlayer.getDuration === 'function') {
+          try {
+            const cur = activeYtPlayer.getCurrentTime() || 0;
+            const dur = activeYtPlayer.getDuration() || ytTarget;
+            if (dur > 0) {
+              const curM = Math.floor(cur / 60);
+              const curS = Math.floor(cur % 60);
+              const durM = Math.floor(dur / 60);
+              const durS = Math.floor(dur % 60);
+              const pct = Math.min(100, Math.round((cur / dur) * 100));
+
+              if (timerText) timerText.textContent = `${curM}:${curS < 10 ? '0' : ''}${curS} / ${durM}:${durS < 10 ? '0' : ''}${durS} (${pct}%)`;
+              if (timerBar) timerBar.style.width = `${pct}%`;
+
+              if (cur >= dur - 1.5 && dur > 5) {
+                clearActiveStudyTimer();
+                showToast('🎉 Video selesai ditonton! Sesi berikutnya telah terbuka.', 'success');
+                markUnitComplete(currentUnit.id, course.id);
+                return;
+              }
+            }
+          } catch (e) {}
+        }
+
+        ytWatchedSeconds++;
+        const pct = Math.min(100, Math.round((ytWatchedSeconds / ytTarget) * 100));
+        if (timerBar) timerBar.style.width = `${pct}%`;
+
+        const rem = Math.max(0, ytTarget - ytWatchedSeconds);
+        const remM = Math.floor(rem / 60);
+        const remS = rem % 60;
+        if (timerText && (!activeYtPlayer || !activeYtPlayer.getDuration)) {
+          timerText.textContent = `Menonton (${remM}:${remS < 10 ? '0' : ''}${remS} tersisa)`;
+        }
+
+        if (ytWatchedSeconds >= ytTarget) {
+          clearActiveStudyTimer();
+          showToast('🎉 Durasi tonton video terpenuhi! Sesi berikutnya telah terbuka.', 'success');
+          markUnitComplete(currentUnit.id, course.id);
+        }
+      }, 1000);
+
+      return;
+    }
+
+    // 3. Timer Belajar Otomatis untuk Materi Teks / Bacaan
     let elapsedSeconds = 0;
-    const timerText = document.getElementById('study-timer-text');
-    const timerBar = document.getElementById('study-timer-progress');
-    const timerBadge = document.getElementById('study-timer-display');
 
     const updateTimerDisplay = () => {
       const remaining = Math.max(0, targetSeconds - elapsedSeconds);
       const remM = Math.floor(remaining / 60);
       const remS = remaining % 60;
+      const remStr = `${remM}:${remS < 10 ? '0' : ''}${remS}`;
       const percent = Math.min(100, Math.round((elapsedSeconds / targetSeconds) * 100));
 
       if (timerText) {
-        timerText.textContent = `${remM}:${remS < 10 ? '0' : ''}${remS}`;
+        timerText.textContent = `${remStr} tersisa`;
       }
       if (timerBar) {
         timerBar.style.width = `${percent}%`;
+      }
+      if (countdownSpan) {
+        countdownSpan.textContent = remStr;
       }
     };
 
     updateTimerDisplay();
 
     activeStudyInterval = setInterval(() => {
-      // Hanya menghitung jika tab browser sedang aktif dibuka oleh siswa
+      // Wajib membaca di tab aktif — jeda otomatis jika tab ditinggalkan / diminimalkan
       if (document.hidden) {
         if (timerBadge && !timerBadge.classList.contains('paused')) {
           timerBadge.classList.add('paused');
@@ -3075,10 +3302,10 @@
       elapsedSeconds++;
       updateTimerDisplay();
 
-      // Waktu belajar minimum tercapai -> Otomatis Tandai Selesai!
+      // Durasi estimasi baca tuntas -> Buka kunci & Tandai Selesai!
       if (elapsedSeconds >= targetSeconds) {
         clearActiveStudyTimer();
-        showToast('🎉 Waktu belajar sesi ini telah terpenuhi! Sesi berikutnya telah terbuka.', 'success');
+        showToast('🎉 Waktu membaca materi telah terpenuhi! Sesi berikutnya telah terbuka.', 'success');
         markUnitComplete(currentUnit.id, course.id);
       }
     }, 1000);
