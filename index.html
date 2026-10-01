@@ -2213,7 +2213,7 @@
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      margin: 1.5rem 0 1.25rem;
+      margin: 1.25rem 0;
       color: var(--tertiary);
       font-size: 0.8125rem;
     }
@@ -2224,6 +2224,43 @@
       flex: 1;
       height: 1px;
       background: var(--border);
+    }
+
+    .btn-google-login {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      background: #ffffff;
+      color: #1f2937;
+      border: 1.5px solid #e5e7eb;
+      border-radius: var(--radius-md);
+      padding: 0.6875rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s ease;
+    }
+
+    .btn-google-login:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .btn-google-login:active {
+      transform: translateY(0);
+      background: #f1f5f9;
+    }
+
+    .btn-google-login .google-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
     }
 
     /* Penyesuaian Responsif untuk Mobile */

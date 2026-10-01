@@ -50,10 +50,31 @@
       return;
     }
 
-    // Setup auth state listener — reaktif terhadap login/logout
+    // Periksa apakah ada error callback OAuth di URL
+    if (window.location.hash && window.location.hash.includes('error=')) {
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const errorDesc = params.get('error_description') || params.get('error');
+      renderLoginPage();
+      if (errorDesc) {
+        setTimeout(() => {
+          showLoginError('Autentikasi Google gagal: ' + decodeURIComponent(errorDesc).replace(/\+/g, ' '));
+        }, 200);
+      }
+      return;
+    }
+
+    let isStartingSession = false;
+
+    // Setup auth state listener — reaktif terhadap login/logout & callback OAuth
     sb.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        await handleSessionStart(session.user);
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        if (isStartingSession) return;
+        isStartingSession = true;
+        try {
+          await handleSessionStart(session.user);
+        } finally {
+          isStartingSession = false;
+        }
       } else if (event === 'SIGNED_OUT') {
         renderLoginPage();
       }
@@ -62,7 +83,14 @@
     // Cek session aktif saat pertama load
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
-      await handleSessionStart(session.user);
+      if (!isStartingSession) {
+        isStartingSession = true;
+        try {
+          await handleSessionStart(session.user);
+        } finally {
+          isStartingSession = false;
+        }
+      }
     } else {
       renderLoginPage();
     }
@@ -112,6 +140,21 @@
           <div id="login-error" class="login-error" style="display:none;"></div>
           <div id="login-success" class="login-success" style="display:none;"></div>
 
+          <!-- Tombol Masuk Cepat dengan Google OAuth -->
+          <button type="button" class="btn-google-login" id="login-google-btn" onclick="handleGoogleLogin()">
+            <svg class="google-icon" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span id="login-google-text">Masuk sebagai Siswa dengan Google</span>
+          </button>
+
+          <div class="login-divider">
+            <span>atau masuk dengan email & password</span>
+          </div>
+
           <!-- FORM LOGIN (Peserta Didik, Tutor & Admin — dibedakan secara visual) -->
           <form id="form-login" onsubmit="handleLogin(event)">
             <div class="form-group">
@@ -157,6 +200,7 @@
     const btnIcon = document.getElementById('login-btn-icon');
     const btnText = document.getElementById('login-btn-text');
     const hintText = document.getElementById('login-hint-text');
+    const googleBtnText = document.getElementById('login-google-text');
 
     if (errEl) errEl.style.display = 'none';
     if (succEl) succEl.style.display = 'none';
@@ -170,19 +214,71 @@
       if (emailInput) emailInput.placeholder = 'contoh: siswa@institusi.ac.id';
       if (btnIcon) btnIcon.textContent = '🎓';
       if (btnText) btnText.textContent = 'Masuk sebagai Peserta Didik';
+      if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Siswa dengan Google';
       if (hintText) hintText.textContent = 'Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.';
     } else if (target === 'educator') {
       if (emailLabel) emailLabel.textContent = 'Email Tutor Pengampu';
       if (emailInput) emailInput.placeholder = 'contoh: tutor@institusi.ac.id';
       if (btnIcon) btnIcon.textContent = '👨‍🏫';
       if (btnText) btnText.textContent = 'Masuk sebagai Tutor';
+      if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Tutor dengan Google';
       if (hintText) hintText.textContent = 'Portal khusus Tutor Pengampu. Masuk untuk mengelola materi, jadwal Zoom, dan verifikasi kelulusan tema.';
     } else if (target === 'admin') {
       if (emailLabel) emailLabel.textContent = 'Email Administrator';
       if (emailInput) emailInput.placeholder = 'contoh: admin@institusi.ac.id';
       if (btnIcon) btnIcon.textContent = '⚙️';
       if (btnText) btnText.textContent = 'Masuk sebagai Administrator';
+      if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Admin dengan Google';
       if (hintText) hintText.textContent = 'Portal Administrator Pusat Institusi. Akses pengaturan sistem, data pengguna, dan seluruh kurikulum.';
+    }
+  }
+
+  async function handleGoogleLogin() {
+    const sb = getSupabase();
+    if (!sb) {
+      showLoginError('Koneksi Supabase tidak tersedia.');
+      return;
+    }
+
+    const googleBtn = document.getElementById('login-google-btn');
+    const originalContent = googleBtn ? googleBtn.innerHTML : '';
+    if (googleBtn) {
+      googleBtn.disabled = true;
+      googleBtn.style.opacity = '0.75';
+      googleBtn.innerHTML = `
+        <span style="display:inline-block;width:16px;height:16px;border:2px solid #cbd5e1;border-top-color:#4285F4;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:8px;"></span>
+        Menghubungkan ke Google...
+      `;
+    }
+
+    const currentTab = AppState.activeLoginTab || 'student';
+    try {
+      localStorage.setItem('coursehub_login_role_intent', currentTab);
+    } catch (e) {
+      console.warn('localStorage error:', e);
+    }
+
+    const redirectUrl = window.location.origin + window.location.pathname;
+
+    const { data, error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account'
+        }
+      }
+    });
+
+    if (error) {
+      console.error('Google OAuth error:', error);
+      showLoginError('Gagal menghubungkan Google Auth: ' + (error.message || '') + '. Pastikan Google Provider sudah diaktifkan di Supabase Dashboard.');
+      if (googleBtn) {
+        googleBtn.disabled = false;
+        googleBtn.style.opacity = '1';
+        googleBtn.innerHTML = originalContent;
+      }
     }
   }
 
@@ -219,6 +315,14 @@
     AppState.authUser = authUser;
     AppState.isDemoMode = false;
 
+    // Pulihkan preferensi tab login jika ada (misal setelah redirect OAuth)
+    const savedIntent = localStorage.getItem('coursehub_login_role_intent');
+    if (savedIntent) {
+      AppState.activeLoginTab = savedIntent;
+      localStorage.removeItem('coursehub_login_role_intent');
+    }
+    const activeTab = AppState.activeLoginTab || 'student';
+
     // Ambil profil dari tabel profiles berdasarkan auth_user_id
     const sb = getSupabase();
     const { data: profile, error } = await sb
@@ -240,9 +344,47 @@
         await sb.from('profiles').update({ auth_user_id: authUser.id }).eq('id', profileByEmail.id);
         AppState.user = profileByEmail;
       } else {
-        showLoginError('Profil pengguna tidak ditemukan di database. Hubungi administrator.');
-        await getSupabase().auth.signOut();
-        return;
+        // Cek apakah login via Google
+        const isGoogleUser = authUser.app_metadata?.provider === 'google' || 
+          (authUser.identities && authUser.identities.some(i => i.provider === 'google'));
+
+        if (isGoogleUser && activeTab === 'student') {
+          // Otomatis daftarkan profile Peserta Baru jika login lewat tab Peserta Didik
+          const fullName = authUser.user_metadata?.full_name || 
+                           authUser.user_metadata?.name || 
+                           authUser.email.split('@')[0];
+          const newStudentProfile = {
+            auth_user_id: authUser.id,
+            name: fullName,
+            email: authUser.email,
+            role: 'student',
+            subject: 'Umum',
+            class_name: 'Kelas Terbuka',
+            status: 'Aktif'
+          };
+          const { data: createdProfile, error: createErr } = await sb
+            .from('profiles')
+            .insert([newStudentProfile])
+            .select()
+            .single();
+
+          if (!createErr && createdProfile) {
+            AppState.user = createdProfile;
+          } else {
+            console.error('Gagal membuat profil Google:', createErr);
+            showLoginError('Gagal menyiapkan akun profil Google. Hubungi administrator.');
+            await getSupabase().auth.signOut();
+            return;
+          }
+        } else if (isGoogleUser && (activeTab === 'educator' || activeTab === 'admin')) {
+          showLoginError(`⛔ Akses Ditolak: Akun Google (${authUser.email}) belum terdaftar sebagai ${activeTab === 'educator' ? 'Tutor' : 'Administrator'}. Silakan hubungi admin institusi.`);
+          await getSupabase().auth.signOut();
+          return;
+        } else {
+          showLoginError('Profil pengguna tidak ditemukan di database. Hubungi administrator.');
+          await getSupabase().auth.signOut();
+          return;
+        }
       }
     } else {
       AppState.user = profile;
@@ -251,7 +393,6 @@
     // =========================================================
     // VALIDASI PERAN LOGIN KETAT (Strict Portal Role Segregation)
     // =========================================================
-    const activeTab = AppState.activeLoginTab || 'student';
     const userRole = (AppState.user?.role || '').toLowerCase();
 
     // 1. Batasi jika akun peserta login di sisi tutor
@@ -289,6 +430,10 @@
     const loginEl = document.getElementById('login-overlay');
     if (loginEl) loginEl.style.display = 'none';
     document.getElementById('app-root').style.display = 'flex';
+    // Bersihkan hash token dari address bar agar rapi & aman
+    if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('error='))) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
   }
 
   function showLoginError(msg) {
