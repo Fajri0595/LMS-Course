@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   subject TEXT DEFAULT 'Umum',
   class_name TEXT DEFAULT 'XII MIPA 1',
   teacher_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  phone TEXT,
+  whatsapp TEXT,
   status TEXT DEFAULT 'Aktif',
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -50,7 +52,7 @@ CREATE TABLE IF NOT EXISTS public.course_contents (
   title TEXT NOT NULL,
   type TEXT CHECK (type IN (
     'pre_exam', 'materi', 'video', 'kuis_popup', 'evaluasi', 'post_exam', 'tugas', 'refleksi', 'sertifikat',
-    'Materi', 'Video', 'Kaidah', 'Latihan', 'Kuis'
+    'Materi', 'Video', 'Kaidah', 'Latihan', 'Kuis', 'tugas_drive', 'tugas_zoom'
   )) DEFAULT 'materi',
   duration TEXT DEFAULT '5 Menit',
   order_index INT DEFAULT 1,
@@ -88,6 +90,29 @@ CREATE TABLE IF NOT EXISTS public.progress (
   UNIQUE(student_id, content_id)
 );
 
+-- 8. Assignment Submissions Table (Pengumpulan Tugas Google Drive & Jadwal Mentoring Zoom)
+CREATE TABLE IF NOT EXISTS public.assignment_submissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id UUID REFERENCES public.courses(id) ON DELETE CASCADE NOT NULL,
+  module_id UUID REFERENCES public.course_modules(id) ON DELETE SET NULL,
+  content_id UUID REFERENCES public.course_contents(id) ON DELETE CASCADE NOT NULL,
+  student_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  tutor_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  type TEXT CHECK (type IN ('drive', 'zoom')) NOT NULL DEFAULT 'drive',
+  drive_url TEXT,
+  student_notes TEXT,
+  zoom_url TEXT,
+  zoom_meeting_time TIMESTAMPTZ,
+  schedule_status TEXT CHECK (schedule_status IN ('proposed', 'confirmed', 'rescheduled', 'completed')) DEFAULT 'proposed',
+  approval_status TEXT CHECK (approval_status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+  score INT,
+  tutor_feedback TEXT,
+  submitted_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  reviewed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  UNIQUE(student_id, content_id)
+);
+
 -- ==============================================================================
 -- Row Level Security (RLS) Policies
 -- ==============================================================================
@@ -98,6 +123,7 @@ ALTER TABLE public.course_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.course_contents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.progress ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assignment_submissions ENABLE ROW LEVEL SECURITY;
 
 -- Policy untuk Akses Publik / Anonim Demo (Bisa disesuaikan dengan auth.uid() saat production)
 CREATE POLICY "Public Read Profiles" ON public.profiles FOR SELECT USING (true);
@@ -126,6 +152,11 @@ CREATE POLICY "Public Insert Enrollments" ON public.enrollments FOR INSERT WITH 
 CREATE POLICY "Public Read Progress" ON public.progress FOR SELECT USING (true);
 CREATE POLICY "Public Insert Progress" ON public.progress FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Progress" ON public.progress FOR UPDATE USING (true);
+
+CREATE POLICY "Public Read Submissions" ON public.assignment_submissions FOR SELECT USING (true);
+CREATE POLICY "Public Insert Submissions" ON public.assignment_submissions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Submissions" ON public.assignment_submissions FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Submissions" ON public.assignment_submissions FOR DELETE USING (true);
 
 -- ==============================================================================
 -- Initial Seed Data (Contoh Data Awal)
