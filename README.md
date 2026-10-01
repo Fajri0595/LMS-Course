@@ -52,10 +52,7 @@ CourseHub LMS adalah aplikasi Learning Management System (LMS) berbasis **Modern
 ├── supabase_schema.sql                  # Skema database lengkap PostgreSQL (Fresh Deploy)
 ├── migration_assignment_approval_zoom.sql # Skrip migrasi penugasan Drive & Zoom
 ├── migration_hierarchical_curriculum.sql# Skrip migrasi kurikulum berjenjang
-├── setup_auth_users.sql                 # Skrip SQL untuk bootstrap user auth
-├── panduan_tutor_cetak.html             # Template cetak panduan pengampu
-├── PANDUAN_PENULISAN_KONTEN_TUTOR.md    # Buku panduan penulisan modul LMS format Markdown
-└── PANDUAN_PENULISAN_KONTEN_TUTOR.pdf   # Buku panduan penulisan modul LMS format PDF
+└── setup_auth_users.sql                 # Skrip SQL untuk bootstrap user auth
 ```
 
 ---
