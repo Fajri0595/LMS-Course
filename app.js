@@ -371,8 +371,49 @@
             await getSupabase().auth.signOut();
             return;
           }
-        } else if (isGoogleUser && (activeTab === 'educator' || activeTab === 'admin')) {
-          showLoginError(`⛔ Akses Ditolak: Akun Google (${authUser.email}) belum terdaftar sebagai ${activeTab === 'educator' ? 'Tutor' : 'Administrator'}. Silakan hubungi admin institusi.`);
+        } else if (isGoogleUser && activeTab === 'admin') {
+          // Periksa apakah database belum memiliki Administrator sama sekali (Setup Admin Pertama)
+          const { data: existingAdmins } = await sb
+            .from('profiles')
+            .select('id')
+            .eq('role', 'admin')
+            .limit(1);
+
+          if (!existingAdmins || existingAdmins.length === 0) {
+            // Belum ada admin: angkat akun Google pertama ini sebagai Super Administrator
+            const fullName = authUser.user_metadata?.full_name || 
+                             authUser.user_metadata?.name || 
+                             authUser.email.split('@')[0];
+            const newAdminProfile = {
+              auth_user_id: authUser.id,
+              name: fullName,
+              email: authUser.email,
+              role: 'admin',
+              subject: 'Administrator Pusat',
+              class_name: 'Pusat Institusi',
+              status: 'Aktif'
+            };
+            const { data: createdAdmin, error: createAdminErr } = await sb
+              .from('profiles')
+              .insert([newAdminProfile])
+              .select()
+              .single();
+
+            if (!createAdminErr && createdAdmin) {
+              AppState.user = createdAdmin;
+            } else {
+              console.error('Gagal membuat profil Admin:', createAdminErr);
+              showLoginError('Gagal mendaftarkan akun Administrator. Hubungi administrator.');
+              await getSupabase().auth.signOut();
+              return;
+            }
+          } else {
+            showLoginError(`⛔ Akses Ditolak: Akun Google (${authUser.email}) belum terdaftar sebagai Administrator. Silakan hubungi admin institusi.`);
+            await getSupabase().auth.signOut();
+            return;
+          }
+        } else if (isGoogleUser && activeTab === 'educator') {
+          showLoginError(`⛔ Akses Ditolak: Akun Google (${authUser.email}) belum terdaftar sebagai Tutor Pengampu. Silakan hubungi admin institusi.`);
           await getSupabase().auth.signOut();
           return;
         } else {
@@ -388,7 +429,7 @@
     // =========================================================
     // VALIDASI PERAN LOGIN KETAT (Strict Portal Role Segregation)
     // =========================================================
-    const userRole = (AppState.user?.role || '').toLowerCase();
+    let userRole = (AppState.user?.role || '').toLowerCase();
 
     // 1. Batasi jika akun peserta login di sisi tutor
     if (activeTab === 'educator' && userRole === 'student') {
@@ -401,11 +442,24 @@
 
     // 2. Batasi jika akun peserta atau tutor login di sisi administrator
     if (activeTab === 'admin' && userRole !== 'admin') {
-      showLoginError('⛔ Akses Ditolak: Akun Anda tidak memiliki hak akses sebagai Administrator Institusi.');
-      await sb.auth.signOut();
-      AppState.user = null;
-      AppState.authUser = null;
-      return;
+      // Jika sistem belum memiliki Admin sama sekali, promosikan akun terdaftar ini menjadi Administrator
+      const { data: existingAdmins } = await sb
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+        .limit(1);
+
+      if (!existingAdmins || existingAdmins.length === 0) {
+        await sb.from('profiles').update({ role: 'admin' }).eq('id', AppState.user.id);
+        AppState.user.role = 'admin';
+        userRole = 'admin';
+      } else {
+        showLoginError('⛔ Akses Ditolak: Akun Anda tidak memiliki hak akses sebagai Administrator Institusi.');
+        await sb.auth.signOut();
+        AppState.user = null;
+        AppState.authUser = null;
+        return;
+      }
     }
 
     // 3. Batasi jika akun tutor login di sisi peserta didik
