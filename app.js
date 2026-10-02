@@ -2145,7 +2145,6 @@
    * ========================================================= */
   function buildSidebarForAdmin() {
     const nav = document.getElementById('sidebar-nav-container');
-    const logoutHtml = buildLogoutButton();
     const pendingCount = (AppState.submissions || []).filter(s => s.approval_status === 'pending').length;
 
     nav.innerHTML = `
@@ -2176,13 +2175,11 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
         <span>Mode Fullscreen</span>
       </a>
-      ${logoutHtml}
     `;
   }
 
   function buildSidebarForEducator() {
     const nav = document.getElementById('sidebar-nav-container');
-    const logoutHtml = buildLogoutButton();
     const tutorId = AppState.user?.id;
     const tutorName = AppState.user?.name;
     const myCourseIds = AppState.courses
@@ -2212,13 +2209,11 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
         <span>Mode Fullscreen</span>
       </a>
-      ${logoutHtml}
     `;
   }
 
   function buildSidebarForStudent() {
     const nav = document.getElementById('sidebar-nav-container');
-    const logoutHtml = buildLogoutButton();
     nav.innerHTML = `
       <div class="nav-group-title">PEMBELAJARAN</div>
       <a class="nav-item active" data-view="student-dashboard" onclick="navigateTo('student-dashboard')">
@@ -2233,19 +2228,12 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
         <span>Capaian Belajar Saya</span>
       </a>
-      ${logoutHtml}
     `;
   }
 
-
   function buildLogoutButton() {
-    return `
-      <div class="nav-group-title">AKUN</div>
-      <a class="nav-item" onclick="handleLogout()" style="color:var(--error);">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-        <span>${AppState.isDemoMode ? 'Kembali ke Login' : 'Keluar (Logout)'}</span>
-      </a>
-    `;
+    // Tombol logout di sidebar ditiadakan agar tidak duplikat dengan tombol logout di pojok kanan atas navbar
+    return '';
   }
 
   /* =========================================================
@@ -3024,10 +3012,16 @@
           }
         }
 
-        const isExpOpen = AppState.quizExplanationOpen && AppState.quizExplanationOpen[currentUnit.id];
+        const passGrade = currentUnit.passingScore || (typeLower === 'pre_exam' ? 60 : 70);
+        const isPassed = progress.is_passed !== undefined ? progress.is_passed : (score >= passGrade);
+        // Kunci jawaban & pembahasan HANYA boleh ditampilkan jika siswa telah lulus batas KKM
+        // Untuk mencegah kebocoran jawaban saat siswa remedial
+        const canViewExplanation = isPassed || AppState.activeRole === 'educator' || AppState.activeRole === 'admin';
+
+        const isExpOpen = canViewExplanation && AppState.quizExplanationOpen && AppState.quizExplanationOpen[currentUnit.id];
         let explanationSectionHtml = '';
 
-        if (reviewData && Array.isArray(reviewData.questions) && reviewData.questions.length > 0) {
+        if (canViewExplanation && reviewData && Array.isArray(reviewData.questions) && reviewData.questions.length > 0) {
           if (isExpOpen) {
             const itemsHtml = reviewData.questions.map((q, idx) => {
               const userAns = q.userAnswer;
@@ -3095,9 +3089,6 @@
           }
         }
 
-        const passGrade = currentUnit.passingScore || (typeLower === 'pre_exam' ? 60 : 70);
-        const isPassed = progress.is_passed !== undefined ? progress.is_passed : (score >= passGrade);
-
         contentHtml = `
           <div class="exam-result-box">
             <div class="exam-illustration-badge">
@@ -3148,7 +3139,7 @@
               <button class="btn ${isPassed ? 'btn-outline' : 'btn-authoritative'} btn-sm" onclick="retakeQuiz(${AppState.activeUnitIndex})" style="font-weight:700;">
                 🔄 ${isPassed ? 'Kerjakan Ulang untuk Perbaiki Nilai' : 'Ulangi Kuis / Remedial (Soal & Opsi Diacak Ulang)'}
               </button>
-              ${reviewData && Array.isArray(reviewData.questions) && reviewData.questions.length > 0 ? `
+              ${canViewExplanation && reviewData && Array.isArray(reviewData.questions) && reviewData.questions.length > 0 ? `
                 <button class="btn btn-outline btn-sm" onclick="toggleQuizExplanation('${currentUnit.id}')" style="font-weight:600;">
                   ${isExpOpen ? '🙈 Tutup Pembahasan' : '📖 Lihat Pembahasan & Kunci Jawaban'}
                 </button>
@@ -3159,6 +3150,12 @@
                 </button>
               ` : ''}
             </div>
+
+            ${!canViewExplanation ? `
+              <p style="font-size:0.8125rem;color:var(--tertiary);margin-top:1rem;text-align:center;">
+                🔒 <em>Kunci jawaban dan pembahasan soal dirahasiakan dan baru akan terbuka setelah Anda berhasil mencapai batas kelulusan (KKM).</em>
+              </p>
+            ` : ''}
 
             ${explanationSectionHtml}
           </div>
@@ -4430,6 +4427,20 @@
 
   function toggleQuizExplanation(unitId) {
     if (!AppState.quizExplanationOpen) AppState.quizExplanationOpen = {};
+    const progress = (AppState.progressData && AppState.progressData[unitId]) || {};
+    const course = AppState.activeCoursePlayer;
+    const unit = course ? (course.contents || []).find(u => u.id === unitId) : null;
+    const typeLower = ((unit && unit.type) || '').toLowerCase();
+    const passGrade = (unit && unit.passingScore) || (typeLower === 'pre_exam' ? 60 : 70);
+    const score = progress.score !== undefined ? progress.score : 0;
+    const isPassed = progress.is_passed !== undefined ? progress.is_passed : (score >= passGrade);
+    const isPrivileged = AppState.activeRole === 'educator' || AppState.activeRole === 'admin';
+
+    if (!isPassed && !isPrivileged) {
+      showToast('Kunci jawaban & pembahasan soal dirahasiakan sebelum Anda mencapai batas kelulusan (KKM).', 'warning');
+      return;
+    }
+
     AppState.quizExplanationOpen[unitId] = !AppState.quizExplanationOpen[unitId];
     if (AppState.activeCoursePlayer) {
       renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
@@ -4575,6 +4586,9 @@
 
     if (!AppState.quizReviewMode) AppState.quizReviewMode = {};
     AppState.quizReviewMode[unit.id] = false;
+    if (AppState.quizExplanationOpen) {
+      delete AppState.quizExplanationOpen[unit.id];
+    }
 
     try {
       await dbSubmitQuizResult({
@@ -4610,6 +4624,10 @@
     delete AppState.activeQuizTimerUnitId;
     delete AppState.activeQuizTimerStart;
     delete AppState.activeQuizTimerTotalSecs;
+
+    if (AppState.quizExplanationOpen) {
+      delete AppState.quizExplanationOpen[unit.id];
+    }
 
     // Hapus sesi acak lama dan acak ulang susunan soal & opsi
     if (AppState.activeQuizSession) {
@@ -6872,24 +6890,48 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
 
   // --- Delete Educator ---
   async function confirmDeleteEducator(id, name) {
-    const assignedCourses = AppState.courses.filter(c => c.authorId === id);
+    const assignedCourses = AppState.courses.filter(c => c.authorId === id || c.author_id === id);
     let confirmMsg = `Apakah Anda yakin ingin menghapus akun pendidik "${name}"?`;
     if (assignedCourses.length > 0) {
-      confirmMsg += `\n\n⚠️ Pendidik ini tercatat mengampu ${assignedCourses.length} course. Data course tidak akan terhapus, namun akun pengampu ini akan dilepas.`;
+      confirmMsg += `\n\n⚠️ Pendidik ini tercatat mengampu ${assignedCourses.length} course. Relasi pengampu pada course akan dilepas terlebih dahulu.`;
     }
     confirmMsg += '\n\nTindakan ini permanen. Lanjutkan?';
 
     if (!confirm(confirmMsg)) return;
 
     try {
+      showToast('Sedang menghapus akun pendidik...', 'info');
       const sb = getSupabase();
       if (sb && !AppState.isDemoMode) {
+        // 1. Lepaskan keterkaitan author_id di tabel courses agar tidak memicu foreign key violation
+        try {
+          await sb.from('courses').update({ author_id: null, author_name: 'Belum Ditentukan' }).eq('author_id', id);
+        } catch (e) {
+          console.warn('Gagal lepas author_id di courses:', e);
+        }
+
+        // 2. Bersihkan pendaftaran, progress, atau submissions terkait jika ada
+        try { await sb.from('enrollments').delete().eq('student_id', id); } catch (_) {}
+        try { await sb.from('progress').delete().eq('student_id', id); } catch (_) {}
+        try { await sb.from('submissions').delete().eq('tutor_id', id); } catch (_) {}
+        try { await sb.from('submissions').delete().eq('student_id', id); } catch (_) {}
+
+        // 3. Hapus profil dari tabel profiles
         const { error } = await sb.from('profiles').delete().eq('id', id);
         if (error) throw error;
-        showToast(`✅ Akun pendidik "${name}" berhasil dihapus.`, 'success');
+        showToast(`✅ Akun pendidik "${name}" berhasil dihapus dari database.`, 'success');
       } else {
         showToast(`✅ Akun pendidik "${name}" dihapus (mode demo).`, 'success');
       }
+
+      // Update data kursus di memori
+      AppState.courses.forEach(c => {
+        if (c.authorId === id || c.author_id === id) {
+          c.authorId = null;
+          c.author_id = null;
+          c.authorName = 'Belum Ditentukan';
+        }
+      });
 
       AppState.educators = AppState.educators.filter(e => e.id !== id);
       renderAdminDashboard(document.getElementById('view-container'));
@@ -6938,22 +6980,35 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
       showToast('Sedang menghapus peserta didik...', 'info');
       const sb = getSupabase();
       if (sb && !AppState.isDemoMode) {
-        // Hapus entitas relasi terlebih dahulu agar tidak memicu foreign key violation
-        try { await sb.from('progress').delete().eq('user_id', studentId); } catch (_) {}
-        try { await sb.from('enrollments').delete().eq('student_id', studentId); } catch (_) {}
+        // 1. Hapus entitas relasi terlebih dahulu dengan kolom yang tepat (student_id)
+        const { error: prErr } = await sb.from('progress').delete().eq('student_id', studentId);
+        if (prErr) console.warn('Pembersihan progress siswa:', prErr);
+
+        const { error: enErr } = await sb.from('enrollments').delete().eq('student_id', studentId);
+        if (enErr) console.warn('Pembersihan enrollments siswa:', enErr);
+
         try { await sb.from('submissions').delete().eq('student_id', studentId); } catch (_) {}
         
+        // 2. Hapus profil dari tabel profiles
         const { error } = await sb.from('profiles').delete().eq('id', studentId);
         if (error) throw error;
-        showToast(`✅ Data peserta didik "${studentName}" berhasil dihapus.`, 'success');
+        showToast(`✅ Data peserta didik "${studentName}" berhasil dihapus dari database.`, 'success');
       } else {
         showToast(`✅ Data peserta didik "${studentName}" dihapus (mode demo).`, 'success');
       }
 
+      // 3. Perbarui daftar siswa di state memori
       AppState.students = AppState.students.filter(s => s.id !== studentId);
+
+      // 4. Sinkronisasi status jumlah siswa terdaftar di course secara realtime (Catatan 3)
       if (sb && !AppState.isDemoMode) {
         await loadEnrollmentCounts(sb);
+      } else {
+        (AppState.courses || []).forEach(c => {
+          c.enrolledStudents = Math.max(0, (c.enrolledStudents || 1) - 1);
+        });
       }
+
       renderStudentManagement(document.getElementById('view-container'));
     } catch (err) {
       showToast('❌ Gagal menghapus peserta didik: ' + err.message, 'error');
