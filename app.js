@@ -53,9 +53,18 @@
       return;
     }
 
+    // Periksa apakah URL mengindikasikan alur pemulihan kata sandi (password recovery)
+    const initHash = window.location.hash || '';
+    const initSearch = window.location.search || '';
+    if (initHash.includes('type=recovery') || initSearch.includes('type=recovery')) {
+      try { sessionStorage.setItem('coursehub_recovery_mode', '1'); } catch (_) {}
+      AppState.isPasswordRecovery = true;
+      AppState.loginScreen = 'reset-password';
+    }
+
     // Periksa apakah ada error callback OAuth di URL
-    if (window.location.hash && window.location.hash.includes('error=')) {
-      const params = new URLSearchParams(window.location.hash.substring(1));
+    if (initHash && initHash.includes('error=')) {
+      const params = new URLSearchParams(initHash.substring(1));
       const errorDesc = params.get('error_description') || params.get('error');
       renderLoginPage();
       if (errorDesc) {
@@ -70,11 +79,31 @@
 
     // Setup auth state listener — reaktif terhadap login/logout & callback OAuth
     sb.auth.onAuthStateChange(async (event, session) => {
+      // 1. Tangkap event eksplisit pemulihan kata sandi dari Supabase
       if (event === 'PASSWORD_RECOVERY') {
+        try { sessionStorage.setItem('coursehub_recovery_mode', '1'); } catch (_) {}
+        AppState.isPasswordRecovery = true;
         AppState.loginScreen = 'reset-password';
         renderLoginPage();
         return;
       }
+
+      // 2. Proteksi recovery: Jika sedang dalam pemulihan password, jangan biarkan SIGNED_IN masuk ke dashboard!
+      let inRecovery = false;
+      try {
+        inRecovery = AppState.isPasswordRecovery || 
+                     sessionStorage.getItem('coursehub_recovery_mode') === '1' ||
+                     (window.location.hash && window.location.hash.includes('type=recovery')) ||
+                     (window.location.search && window.location.search.includes('type=recovery'));
+      } catch (_) {}
+
+      if (inRecovery) {
+        AppState.isPasswordRecovery = true;
+        AppState.loginScreen = 'reset-password';
+        renderLoginPage();
+        return;
+      }
+
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         if (isStartingSession) return;
         isStartingSession = true;
@@ -88,15 +117,23 @@
       }
     });
 
-    // Cek apakah ada hash recovery pada URL
-    const initHash = window.location.hash || '';
-    if (initHash.includes('type=recovery')) {
+    // Cek mode recovery sebelum getSession() pada pertama kali dimuat
+    let inRecoveryInit = false;
+    try {
+      inRecoveryInit = AppState.isPasswordRecovery || 
+                       sessionStorage.getItem('coursehub_recovery_mode') === '1' ||
+                       (window.location.hash && window.location.hash.includes('type=recovery')) ||
+                       (window.location.search && window.location.search.includes('type=recovery'));
+    } catch (_) {}
+
+    if (inRecoveryInit) {
+      AppState.isPasswordRecovery = true;
       AppState.loginScreen = 'reset-password';
       renderLoginPage();
       return;
     }
 
-    // Cek session aktif saat pertama load
+    // Cek session aktif saat pertama load normal (bukan alur recovery)
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
       if (!isStartingSession) {
@@ -541,7 +578,7 @@
             <div style="margin-bottom:1.5rem;">
               <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Atur Password Baru</h1>
               <p class="brand-subtitle" style="font-size:0.8125rem;color:var(--tertiary);margin:0;">
-                Silakan buat kata sandi baru untuk akun CourseHub LMS Anda.
+                Silakan tentukan kata sandi baru yang aman untuk akun CourseHub LMS Anda.
               </p>
             </div>
 
@@ -550,26 +587,46 @@
 
             <form id="form-reset-password" onsubmit="handleResetPasswordSubmit(event)">
               <div class="form-group">
-                <label class="form-label">Password Baru</label>
+                <label class="form-label">Password Baru <span style="color:var(--error);">*</span></label>
                 <div style="position:relative;">
-                  <input type="password" id="new-password" class="form-control" placeholder="Minimal 6 karakter" required minlength="6" autocomplete="new-password" style="padding-right:3rem;" onkeyup="handleCapsLockCheck(event, 'caps-warning-reset')" onkeydown="handleCapsLockCheck(event, 'caps-warning-reset')">
+                  <input type="password" id="new-password" class="form-control" placeholder="Minimal 6 karakter" required minlength="6" autocomplete="new-password" style="padding-right:3rem;" oninput="evaluatePasswordStrength(this.value, 'reset')" onkeyup="handleCapsLockCheck(event, 'caps-warning-reset')" onkeydown="handleCapsLockCheck(event, 'caps-warning-reset')">
                   <button type="button" onclick="togglePasswordVis('new-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
                 </div>
                 <div id="caps-warning-reset" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+
+                <!-- Password Strength Meter Realtime -->
+                <div class="pw-strength-bar">
+                  <div class="pw-strength-progress" id="reset-pw-bar"></div>
+                </div>
+                <div class="pw-strength-label">
+                  <span id="reset-pw-label" style="color:var(--tertiary);">Kekuatan kata sandi:</span>
+                  <span id="reset-pw-score" style="color:var(--tertiary);">-</span>
+                </div>
+                <div class="pw-criteria-list">
+                  <span class="pw-criteria-item" id="reset-crit-len">⚪ Minimal 6 karakter</span>
+                  <span class="pw-criteria-item" id="reset-crit-combo">⚪ Kombinasi huruf &amp; angka</span>
+                </div>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Konfirmasi Password Baru</label>
+                <label class="form-label">Konfirmasi Password Baru <span style="color:var(--error);">*</span></label>
                 <div style="position:relative;">
-                  <input type="password" id="confirm-new-password" class="form-control" placeholder="Ketik ulang password baru" required minlength="6" autocomplete="new-password" style="padding-right:3rem;">
+                  <input type="password" id="confirm-new-password" class="form-control" placeholder="Ketik ulang password baru" required minlength="6" autocomplete="new-password" style="padding-right:3rem;" onkeyup="handleCapsLockCheck(event, 'caps-warning-reset-conf')" onkeydown="handleCapsLockCheck(event, 'caps-warning-reset-conf')">
                   <button type="button" onclick="togglePasswordVis('confirm-new-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
                 </div>
+                <div id="caps-warning-reset-conf" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
               </div>
 
               <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.75rem;" id="reset-submit-btn">
                 <span>Simpan Password Baru &amp; Masuk</span>
               </button>
             </form>
+
+            <div style="margin-top:1.5rem;text-align:center;">
+              <a href="javascript:void(0)" onclick="cancelPasswordRecovery()" style="color:var(--tertiary);font-size:0.8125rem;text-decoration:none;display:inline-flex;align-items:center;gap:0.35rem;">
+                ← Batal &amp; Kembali ke Halaman Masuk
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -579,6 +636,22 @@
       document.getElementById('new-password')?.focus();
     }, 50);
   }
+
+  function cancelPasswordRecovery() {
+    try { sessionStorage.removeItem('coursehub_recovery_mode'); } catch (_) {}
+    AppState.isPasswordRecovery = false;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname);
+    } else {
+      window.location.hash = '';
+    }
+    const sb = getSupabase();
+    if (sb) {
+      sb.auth.signOut().catch(() => {});
+    }
+    goToLoginScreen();
+  }
+  window.cancelPasswordRecovery = cancelPasswordRecovery;
 
   function handleCapsLockCheck(e, targetId = 'caps-warning-login') {
     const el = document.getElementById(targetId);
@@ -591,12 +664,12 @@
   }
   window.handleCapsLockCheck = handleCapsLockCheck;
 
-  function evaluatePasswordStrength(password) {
-    const bar = document.getElementById('reg-pw-bar');
-    const label = document.getElementById('reg-pw-label');
-    const scoreText = document.getElementById('reg-pw-score');
-    const critLen = document.getElementById('crit-len');
-    const critCombo = document.getElementById('crit-combo');
+  function evaluatePasswordStrength(password, prefix = 'reg') {
+    const bar = document.getElementById(`${prefix}-pw-bar`);
+    const label = document.getElementById(`${prefix}-pw-label`);
+    const scoreText = document.getElementById(`${prefix}-pw-score`);
+    const critLen = document.getElementById(`${prefix}-crit-len`);
+    const critCombo = document.getElementById(`${prefix}-crit-combo`);
 
     if (!bar || !scoreText) return;
 
@@ -729,13 +802,29 @@
       const { error } = await sb.auth.updateUser({ password: newPassword });
       if (error) throw error;
 
+      try { sessionStorage.removeItem('coursehub_recovery_mode'); } catch (_) {}
+      AppState.isPasswordRecovery = false;
+
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      } else {
+        window.location.hash = '';
+      }
+
       if (succEl) {
         succEl.textContent = '🎉 Kata sandi berhasil diperbarui! Sedang mengalihkan ke halaman masuk...';
         succEl.style.display = 'block';
       }
-      setTimeout(() => {
-        window.location.hash = '';
+      setTimeout(async () => {
+        try { await sb.auth.signOut(); } catch (_) {}
         goToLoginScreen();
+        setTimeout(() => {
+          const succ2 = document.getElementById('login-success');
+          if (succ2) {
+            succ2.textContent = '🎉 Kata sandi berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.';
+            succ2.style.display = 'block';
+          }
+        }, 80);
       }, 1500);
     } catch (err) {
       showLoginError('Gagal memperbarui kata sandi: ' + err.message);
@@ -991,12 +1080,50 @@
       return;
     }
 
+    // 2. Cek keberadaan profil akun di database terlebih dahulu (Mendeteksi akun yang sudah dihapus Admin)
+    try {
+      const { data: profileCheck, error: profErr } = await sb
+        .from('profiles')
+        .select('id, name, email, role, status')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (!profileCheck) {
+        showLoginError(`⛔ Akses Ditolak: Akun (${email}) tidak ditemukan di sistem atau telah dinonaktifkan/dihapus oleh Administrator.`);
+        btn.disabled = false;
+        btn.innerHTML = loginBtnOriginal;
+        return;
+      }
+
+      if (profileCheck.status === 'Nonaktif') {
+        showLoginError(`⛔ Akses Ditolak: Akun (${email}) berstatus Nonaktif. Silakan hubungi Administrator.`);
+        btn.disabled = false;
+        btn.innerHTML = loginBtnOriginal;
+        return;
+      }
+
+      // Validasi kesesuaian peran tab login
+      const userRole = (profileCheck.role || '').toLowerCase();
+      if (userRole && userRole !== target) {
+        const roleNames = { admin: 'Administrator', educator: 'Tutor Pengampu', student: 'Peserta Didik' };
+        const roleName = roleNames[userRole] || userRole;
+        const targetName = roleNames[target] || target;
+        showLoginError(`⛔ Akses Ditolak: Akun (${email}) terdaftar sebagai ${roleName}, bukan sebagai ${targetName}. Silakan beralih ke tab "${roleName}" untuk masuk.`);
+        btn.disabled = false;
+        btn.innerHTML = loginBtnOriginal;
+        return;
+      }
+    } catch (checkErr) {
+      console.warn('Pengecekan profil login:', checkErr);
+    }
+
+    // 3. Autentikasi kredensial kata sandi
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) {
       AppState.failedAttempts = (AppState.failedAttempts || 0) + 1;
       let msg = error.message || '';
       if (msg.includes('Invalid login credentials')) {
-        msg = 'Email atau kata sandi tidak cocok. Jika Anda mendaftar melalui akun Google, silakan gunakan tombol "Masuk dengan Google".';
+        msg = 'Kata sandi yang Anda masukkan salah. Jika akun Anda dibuat via Google, silakan gunakan tombol "Masuk dengan Google", atau gunakan fitur "Lupa Password?".';
       }
 
       if (AppState.failedAttempts >= 4) {
@@ -1025,6 +1152,22 @@
   }
 
   async function handleSessionStart(authUser) {
+    // 0. Jika sedang dalam alur pemulihan kata sandi, jangan pernah buka dashboard!
+    let inRecovery = false;
+    try {
+      inRecovery = AppState.isPasswordRecovery || 
+                   sessionStorage.getItem('coursehub_recovery_mode') === '1' ||
+                   (window.location.hash && window.location.hash.includes('type=recovery')) ||
+                   (window.location.search && window.location.search.includes('type=recovery'));
+    } catch (_) {}
+
+    if (inRecovery) {
+      AppState.isPasswordRecovery = true;
+      AppState.loginScreen = 'reset-password';
+      renderLoginPage();
+      return;
+    }
+
     AppState.authUser = authUser;
     AppState.isDemoMode = false;
 
