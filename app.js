@@ -1623,23 +1623,24 @@
             </div>
           </div>
 
+          ${!isZoom ? `
           <div class="form-group">
             <label class="form-label">Nilai Evaluasi (0 - 100)</label>
             <input type="number" id="review-score" class="form-control" min="0" max="100" value="${sub.score || 85}">
-          </div>
+          </div>` : ''}
 
           <div class="form-group">
             <label class="form-label">Catatan & Masukan Feedback untuk Siswa <span style="color:var(--error);">*</span></label>
-            <textarea id="review-feedback" class="form-control" rows="4" placeholder="Tuliskan umpan balik yang membangun atau instruksi bagian mana yang wajib direvisi oleh peserta..." required>${escHtml(sub.tutor_feedback || 'Pengerjaan tugas Anda sudah sangat baik dan memenuhi standar kelulusan tema ini.')}</textarea>
+            <textarea id="review-feedback" class="form-control" rows="4" placeholder="${isZoom ? 'Tuliskan catatan hasil pertemuan sesi tatap muka mentoring Zoom...' : 'Tuliskan umpan balik yang membangun atau instruksi bagian mana yang wajib direvisi oleh peserta...'}" required>${escHtml(sub.tutor_feedback || (isZoom ? 'Sesi tatap muka virtual Zoom telah terlaksana dengan baik dan tuntas.' : 'Pengerjaan tugas Anda sudah sangat baik dan memenuhi standar kelulusan tema ini.'))}</textarea>
             <small style="color:var(--tertiary);font-size:0.75rem;margin-top:0.25rem;display:block;">
-              💡 Catatan ini akan langsung tampil di layar tugas siswa. Jika meminta revisi, jelaskan apa yang perlu diperbaiki.
+              💡 Catatan ini akan langsung tampil di layar tugas siswa.
             </small>
           </div>
         </form>
       </div>
     `;
 
-    document.getElementById('modal-action-btn').textContent = 'Simpan Keputusan Review';
+    document.getElementById('modal-action-btn').textContent = isZoom ? 'Konfirmasi Sesi Zoom' : 'Simpan Keputusan Review';
     document.getElementById('modal-action-btn').onclick = () => {
       document.getElementById('form-review-submission').requestSubmit();
     };
@@ -1656,7 +1657,8 @@
   window.submitTutorReview = async function(submissionId) {
     const decisionEl = document.querySelector('input[name="review_decision"]:checked');
     const decision = decisionEl ? decisionEl.value : 'approved';
-    const scoreVal = document.getElementById('review-score').value;
+    const scoreEl = document.getElementById('review-score');
+    const scoreVal = scoreEl ? scoreEl.value : null;
     const feedbackVal = document.getElementById('review-feedback').value.trim();
 
     await handleTutorReviewSubmission(submissionId, decision, scoreVal, feedbackVal);
@@ -1669,7 +1671,8 @@
     setModalLoading(true, 'Menyimpan review...');
     try {
       sub.approval_status = decision;
-      sub.score = score ? parseInt(score, 10) : (decision === 'approved' ? 90 : null);
+      // Sesi Zoom murni evaluasi kehadiran/tatap muka tanpa skor nilai
+      sub.score = sub.type === 'zoom' ? null : (score ? parseInt(score, 10) : (decision === 'approved' ? 90 : null));
       sub.tutor_feedback = feedback;
       sub.reviewed_at = new Date().toISOString();
 
@@ -2298,9 +2301,10 @@
             <button class="btn btn-primary btn-sm" onclick="navigateTo('course-player','${c.id}')">
               ▶ Putar Fullscreen
             </button>
+            ${!isEducator ? `
             <button class="btn btn-ghost btn-sm" onclick="openEnrollModal('${c.id}')" title="Kelola Enrollment" style="color:var(--secondary);">
               👥
-            </button>
+            </button>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="confirmDeleteCourse('${c.id}')" title="Hapus Course" style="color:var(--error);">
               🗑️
             </button>
@@ -2421,6 +2425,7 @@
           <button class="btn btn-outline btn-sm" onclick="navigateTo('course-editor','${c.id}')">Edit Kurikulum</button>
           <button class="btn btn-outline btn-sm" onclick="openModalEditCourse('${c.id}')">✏️ Edit Info</button>
           <button class="btn btn-primary btn-sm" onclick="navigateTo('course-player','${c.id}')">Inspeksi Fullscreen</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--secondary);" onclick="openEnrollModal('${c.id}')" title="Kelola Enrollment Siswa">👥 Enrol Siswa</button>
           <button class="btn btn-ghost btn-sm" style="color:var(--error);" onclick="confirmDeleteCourse('${c.id}')">Hapus</button>
         </div>
       </div>
@@ -2636,6 +2641,7 @@
           <button class="btn btn-outline btn-sm" onclick="openModalEditStudent('${s.id}','${escHtml(s.name)}','${escHtml(s.email)}','${escHtml(s.class || '')}','${escHtml(s.status || 'Aktif')}');">✏️ Edit</button>
           <button class="btn btn-outline btn-sm" onclick="openModalEnrollStudent('${s.id}','${escHtml(s.name)}')">Daftarkan ke Course</button>
           <button class="btn btn-ghost btn-sm" onclick="navigateTo('progress-report')">Lihat Nilai</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--error);" onclick="confirmDeleteStudent('${s.id}','${escHtml(s.name)}')" title="Hapus Akun Siswa">🗑️ Hapus</button>
         </td>
       </tr>
     `).join('');
@@ -2954,7 +2960,13 @@
     const typeLower = (currentUnit.type || '').toLowerCase();
     const isQuizUnit = ['pre_exam', 'kuis_popup', 'post_exam', 'kuis'].includes(typeLower) || (currentUnit.quizData && currentUnit.quizData.length > 0);
     const isReviewMode = AppState.quizReviewMode && AppState.quizReviewMode[currentUnit.id];
-    const showResultScreen = (isCompleted || AppState.progressMap[currentUnit.id]) && !isReviewMode;
+    const hasSubmitted = Boolean(
+      (AppState.progressData && AppState.progressData[currentUnit.id]) ||
+      (AppState.lastQuizResults && AppState.lastQuizResults[currentUnit.id]) ||
+      isCompleted ||
+      AppState.progressMap[currentUnit.id]
+    );
+    const showResultScreen = hasSubmitted && !isReviewMode;
 
     let contentHtml = '';
 
@@ -3133,8 +3145,8 @@
             </div>
 
             <div style="margin-top:0.5rem;display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center;">
-              <button class="btn ${isPassed ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="retakeQuiz(${AppState.activeUnitIndex})" style="font-weight:700;">
-                🔄 Kerjakan Ulang ${isPassed ? '' : 'Sekarang'}
+              <button class="btn ${isPassed ? 'btn-outline' : 'btn-authoritative'} btn-sm" onclick="retakeQuiz(${AppState.activeUnitIndex})" style="font-weight:700;">
+                🔄 ${isPassed ? 'Kerjakan Ulang untuk Perbaiki Nilai' : 'Ulangi Kuis / Remedial (Soal & Opsi Diacak Ulang)'}
               </button>
               ${reviewData && Array.isArray(reviewData.questions) && reviewData.questions.length > 0 ? `
                 <button class="btn btn-outline btn-sm" onclick="toggleQuizExplanation('${currentUnit.id}')" style="font-weight:600;">
@@ -3986,7 +3998,6 @@
     const sb = typeof getSupabase === 'function' ? getSupabase() : null;
 
     if (!sb || AppState.isDemoMode) {
-      // Demo mode: tampilkan berdasarkan data lokal
       renderProgressReportStatic(container);
       return;
     }
@@ -3995,43 +4006,74 @@
       if (AppState.currentRole === 'student') {
         // Laporan personal siswa
         const studentId = AppState.user?.id;
-        const { data: progressData } = await sb
+        const { data: rawProgress, error: progErr } = await sb
           .from('progress')
-          .select('content_id, course_id, score, completed_at, content:course_contents(title, type), course:courses(title)')
+          .select('*')
           .eq('student_id', studentId)
           .order('completed_at', { ascending: false });
 
-        const rows = (progressData || []).map(p => `
-          <tr>
-            <td style="color:var(--primary);font-weight:600;">${escHtml(p.course?.title || '-')}</td>
-            <td>${escHtml(p.content?.title || '-')}</td>
-            <td><span class="badge badge-${(p.content?.type||'materi').toLowerCase()}">${p.content?.type || '-'}</span></td>
-            <td><span class="badge badge-success">✅ Selesai</span></td>
-            <td>${new Date(p.completed_at).toLocaleDateString('id-ID')}</td>
-          </tr>
-        `).join('');
+        if (progErr) throw progErr;
+        const progressData = rawProgress || [];
+        AppState.allProgressRecords = progressData;
+
+        // Ambil submissions siswa untuk melengkapi status unit tugas/zoom
+        const studentSubmissions = (AppState.submissions || []).filter(sub => sub.student_id === studentId);
+
+        const rows = progressData.map(p => {
+          const course = AppState.courses.find(c => c.id === p.course_id);
+          const unit = course?.contents?.find(u => u.id === p.content_id);
+          const typeLower = (unit?.type || 'materi').toLowerCase();
+          const isDone = p.status === 'Selesai' || p.is_passed !== false;
+          let scoreText = '-';
+          if (p.score !== null && p.score !== undefined && typeLower !== 'tugas_zoom') {
+            scoreText = `${p.score}/100`;
+          } else if (typeLower === 'tugas_zoom') {
+            scoreText = isDone ? 'Terlaksana' : '-';
+          }
+
+          return `
+            <tr>
+              <td style="color:var(--primary);font-weight:600;">${escHtml(course?.title || '-')}</td>
+              <td>${escHtml(unit?.title || p.content_id || '-')}</td>
+              <td><span class="badge badge-${typeLower}">${unit?.type || 'Materi'}</span></td>
+              <td><span class="badge ${isDone ? 'badge-success' : 'badge-draft'}">${isDone ? '✅ Selesai' : '⏳ Proses'}</span></td>
+              <td style="font-weight:700;color:#0f766e;">${scoreText}</td>
+              <td>${p.completed_at ? new Date(p.completed_at).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '-'}</td>
+            </tr>
+          `;
+        }).join('');
+
+        const studentCourse = AppState.courses[0];
 
         container.innerHTML = `
-          <div style="margin-bottom:1.5rem;">
-            <h2>Capaian Belajar Saya</h2>
-            <p>Riwayat unit materi yang telah diselesaikan.</p>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
+            <div>
+              <h2>Capaian Belajar Saya</h2>
+              <p>Riwayat unit materi dan evaluasi yang telah Anda selesaikan secara realtime.</p>
+            </div>
+            ${studentCourse ? `
+              <button class="btn btn-primary" onclick="exportPDF('${escHtml(AppState.user?.name || 'Peserta Didik')}', '${studentCourse.id}', '${studentId}')">
+                📄 Cetak / Unduh Laporan PDF Resmi (A4)
+              </button>
+            ` : ''}
           </div>
           <div class="table-container">
             <table class="data-table">
-              <thead><tr><th>Course</th><th>Unit Materi</th><th>Jenis</th><th>Status</th><th>Diselesaikan</th></tr></thead>
-              <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--tertiary);padding:2rem;">Belum ada unit yang diselesaikan.</td></tr>'}</tbody>
+              <thead><tr><th>Course</th><th>Unit Materi</th><th>Jenis</th><th>Status</th><th>Nilai</th><th>Diselesaikan</th></tr></thead>
+              <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--tertiary);padding:2rem;">Belum ada unit yang diselesaikan.</td></tr>'}</tbody>
             </table>
           </div>
         `;
       } else {
-        // Admin/Educator: laporan semua siswa
-        const { data: progressData } = await sb
+        // Admin/Educator: laporan capaian semua siswa
+        const { data: rawProgress, error: progErr } = await sb
           .from('progress')
-          .select(`
-            student_id, content_id, course_id, completed_at,
-            student:profiles!progress_student_id_fkey(name, class_name),
-            course:courses!progress_course_id_fkey(title)
-          `);
+          .select('*')
+          .order('completed_at', { ascending: false });
+
+        if (progErr) throw progErr;
+        const progressData = rawProgress || [];
+        AppState.allProgressRecords = progressData;
 
         const isEducator = AppState.currentRole === 'educator';
         const tutorId = AppState.user?.id;
@@ -4044,28 +4086,66 @@
 
         // Agregasi: hitung progress per siswa per course
         const byStudentCourse = {};
-        (progressData || []).forEach(p => {
+
+        // Inisialisasi dari progress yang ada
+        progressData.forEach(p => {
           if (isEducator && myCourseIds && !myCourseIds.includes(p.course_id)) {
             return;
           }
           const key = `${p.student_id}::${p.course_id}`;
+          const st = AppState.students.find(s => s.id === p.student_id) || { name: 'Peserta Didik', class: 'Kelas X' };
+          const cr = AppState.courses.find(c => c.id === p.course_id) || { title: 'Course Pembelajaran' };
+
           if (!byStudentCourse[key]) {
             byStudentCourse[key] = {
-              studentName: p.student?.name || '-',
-              className: p.student?.class_name || '-',
-              courseTitle: p.course?.title || '-',
+              studentName: st.name || '-',
+              className: st.class || '-',
+              courseTitle: cr.title || '-',
               courseId: p.course_id,
               studentId: p.student_id,
-              count: 0
+              count: 0,
+              scores: []
             };
           }
-          byStudentCourse[key].count++;
+          if (p.status === 'Selesai' || p.is_passed !== false) {
+            byStudentCourse[key].count++;
+          }
+          if (typeof p.score === 'number' && p.score !== null) {
+            byStudentCourse[key].scores.push(p.score);
+          }
+        });
+
+        // Sertakan juga siswa yang terdaftar aktif di course meskipun belum mulai
+        const targetCourses = isEducator && myCourseIds
+          ? AppState.courses.filter(c => myCourseIds.includes(c.id))
+          : AppState.courses;
+
+        (targetCourses || []).forEach(c => {
+          (AppState.students || []).forEach(st => {
+            const key = `${st.id}::${c.id}`;
+            const hasProg = progressData.some(p => p.student_id === st.id && p.course_id === c.id);
+            if (hasProg && !byStudentCourse[key]) {
+              byStudentCourse[key] = {
+                studentName: st.name || '-',
+                className: st.class || '-',
+                courseTitle: c.title || '-',
+                courseId: c.id,
+                studentId: st.id,
+                count: 0,
+                scores: []
+              };
+            }
+          });
         });
 
         const rows = Object.values(byStudentCourse).map(row => {
           const course = AppState.courses.find(c => c.id === row.courseId);
-          const total = course ? course.contents.length : '?';
-          const pct = total > 0 ? Math.round((row.count / total) * 100) : 0;
+          const total = course ? course.contents.length : 1;
+          const pct = total > 0 ? Math.min(100, Math.round((row.count / total) * 100)) : 0;
+          const avgScore = row.scores.length > 0 
+            ? Math.round(row.scores.reduce((a, b) => a + b, 0) / row.scores.length)
+            : (pct >= 100 ? 90 : (pct > 0 ? 80 : '-'));
+
           return `
             <tr>
               <td style="font-weight:600;color:var(--primary);">${escHtml(row.studentName)}</td>
@@ -4078,25 +4158,26 @@
                   <span class="progress-text">${pct}%</span>
                 </div>
               </td>
+              <td style="text-align:center;font-weight:700;color:#0f766e;">${avgScore}</td>
               <td>
-                <button class="btn btn-outline btn-sm" onclick="exportPDF('${escHtml(row.studentName)}', '${row.courseId}', '${row.studentId}')">📄 PDF</button>
+                <button class="btn btn-outline btn-sm" onclick="exportPDF('${escHtml(row.studentName)}', '${row.courseId}', '${row.studentId}')">📄 Cetak PDF</button>
               </td>
             </tr>
           `;
         }).join('');
 
         container.innerHTML = `
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
             <div>
               <h2>Laporan Capaian Belajar</h2>
-              <p>Rekap progress nyata dari Supabase — ${Object.keys(byStudentCourse).length} entri progress.</p>
+              <p>Rekapitulasi aktivitas dan progres capaian nyata seluruh peserta didik dari database.</p>
             </div>
-            <button class="btn btn-primary" onclick="exportBatchPDF()">📄 Ekspor PDF Semua</button>
+            <button class="btn btn-primary" onclick="exportBatchPDF()">📄 Ekspor PDF Seluruh Siswa</button>
           </div>
           <div class="table-container">
             <table class="data-table">
-              <thead><tr><th>Nama Siswa</th><th>Rombel</th><th>Course</th><th>Unit Selesai</th><th>Persentase</th><th>Ekspor</th></tr></thead>
-              <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--tertiary);padding:2rem;">Belum ada data progress siswa.</td></tr>'}</tbody>
+              <thead><tr><th>Nama Siswa</th><th>Rombel</th><th>Course</th><th>Unit Selesai</th><th>Persentase</th><th>Rata-rata Nilai</th><th>Ekspor</th></tr></thead>
+              <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--tertiary);padding:2rem;">Belum ada data progress siswa.</td></tr>'}</tbody>
             </table>
           </div>
         `;
@@ -4541,6 +4622,7 @@
     if (!AppState.activeQuizAnswers) AppState.activeQuizAnswers = {};
     AppState.activeQuizAnswers[unit.id] = {};
     AppState.activeQuizStartTime = Date.now();
+    showToast('🎲 Remedial Kuis: Soal dan urutan pilihan jawaban telah diacak ulang. Selamat mengerjakan!', 'info');
     renderCoursePlayer(document.getElementById('view-container'), course.id);
   }
   window.retakeQuiz = retakeQuiz;
@@ -6837,8 +6919,54 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     }
   }
 
+  // --- Delete Student ---
+  async function confirmDeleteStudent(studentId, studentName) {
+    if (AppState.currentRole !== 'admin') {
+      showToast('⛔ Akses Ditolak: Hanya Administrator yang berwenang menghapus data peserta didik.', 'error');
+      return;
+    }
+    const confirmed = confirm(
+      `⚠️ PERINGATAN: Anda akan menghapus akun peserta didik "${studentName}".\n\n` +
+      `• Riwayat pengerjaan materi & nilai kuis\n` +
+      `• Pendaftaran ke seluruh course (enrollments)\n` +
+      `• Profil akun peserta didik\n\n` +
+      `Tindakan ini permanen. Lanjutkan?`
+    );
+    if (!confirmed) return;
+
+    try {
+      showToast('Sedang menghapus peserta didik...', 'info');
+      const sb = getSupabase();
+      if (sb && !AppState.isDemoMode) {
+        // Hapus entitas relasi terlebih dahulu agar tidak memicu foreign key violation
+        try { await sb.from('progress').delete().eq('user_id', studentId); } catch (_) {}
+        try { await sb.from('enrollments').delete().eq('student_id', studentId); } catch (_) {}
+        try { await sb.from('submissions').delete().eq('student_id', studentId); } catch (_) {}
+        
+        const { error } = await sb.from('profiles').delete().eq('id', studentId);
+        if (error) throw error;
+        showToast(`✅ Data peserta didik "${studentName}" berhasil dihapus.`, 'success');
+      } else {
+        showToast(`✅ Data peserta didik "${studentName}" dihapus (mode demo).`, 'success');
+      }
+
+      AppState.students = AppState.students.filter(s => s.id !== studentId);
+      if (sb && !AppState.isDemoMode) {
+        await loadEnrollmentCounts(sb);
+      }
+      renderStudentManagement(document.getElementById('view-container'));
+    } catch (err) {
+      showToast('❌ Gagal menghapus peserta didik: ' + err.message, 'error');
+    }
+  }
+  window.confirmDeleteStudent = confirmDeleteStudent;
+
   // --- Enrollment View ---
   function openEnrollModal(courseId) {
+    if (AppState.currentRole !== 'admin') {
+      showToast('⛔ Akses Ditolak: Pengelolaan pendaftaran peserta hanya dapat dilakukan oleh Administrator.', 'warning');
+      return;
+    }
     const course = AppState.courses.find(c => c.id === courseId);
     const studentOptions = AppState.students.map(s =>
       `<option value="${s.id}">${escHtml(s.name)} (${escHtml(s.class)})</option>`
@@ -7101,7 +7229,7 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
             </td>
             <td>
               ${approvalBadge}
-              ${s.score !== null && s.score !== undefined ? `<div style="font-size:0.75rem;font-weight:700;color:var(--primary);margin-top:0.25rem;">Nilai: ${s.score}/100</div>` : ''}
+              ${!isZoom && s.score !== null && s.score !== undefined ? `<div style="font-size:0.75rem;font-weight:700;color:var(--primary);margin-top:0.25rem;">Nilai: ${s.score}/100</div>` : ''}
             </td>
             <td style="max-width:180px;">
               ${s.tutor_feedback ? `
@@ -7114,8 +7242,8 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
             </td>
             <td>
               <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
-                <button class="btn btn-primary btn-sm" onclick="openModalReviewSubmission('${s.id}')" title="Periksa berkas & beri keputusan kelulusan tema">
-                  ✏️ Review
+                <button class="btn btn-primary btn-sm" onclick="openModalReviewSubmission('${s.id}')" title="${isZoom ? 'Konfirmasi kehadiran & pelaksanaan sesi Zoom' : 'Periksa berkas & beri keputusan kelulusan tema'}">
+                  ${isZoom ? '📝 Konfirmasi Selesai' : '✏️ Review'}
                 </button>
                 ${isZoom ? `
                   <button class="btn btn-outline btn-sm" onclick="openModalConfirmZoomSchedule('${s.id}')" title="Konfirmasi atau jadwalkan ulang sesi Zoom">
@@ -7633,11 +7761,11 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     }, 450);
   }
 
-  function exportPDF(studentName, courseId = null, studentId = null) {
+  async function exportPDF(studentName, courseId = null, studentId = null) {
     const student = (studentId && AppState.students.find(s => s.id === studentId)) ||
       AppState.students.find(s => s.name?.toLowerCase() === (studentName || '').toLowerCase()) ||
       (AppState.user?.name === studentName ? AppState.user : null) ||
-      { name: studentName || 'Peserta Didik', email: 'siswa@coursehub.sch.id', class: 'Kelas X' };
+      { id: studentId || AppState.user?.id, name: studentName || 'Peserta Didik', email: 'siswa@coursehub.sch.id', class: 'Kelas X' };
 
     const course = (courseId && AppState.courses.find(c => c.id === courseId)) ||
       AppState.activeCoursePlayer ||
@@ -7647,6 +7775,26 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     const tutor = getTutorForCourse(course);
     const contents = course.contents || [];
     const totalUnits = contents.length;
+
+    // Ambil data progress nyata dari database Supabase untuk siswa ini
+    const sb = typeof getSupabase === 'function' ? getSupabase() : null;
+    let studentProgressRecords = [];
+    if (sb && !AppState.isDemoMode && student.id) {
+      try {
+        const { data, error } = await sb.from('progress').select('*').eq('student_id', student.id);
+        if (!error && Array.isArray(data)) {
+          studentProgressRecords = data;
+        }
+      } catch (err) {
+        console.warn('Gagal memuat progress individual di exportPDF:', err);
+      }
+    }
+    if (studentProgressRecords.length === 0 && AppState.allProgressRecords) {
+      studentProgressRecords = AppState.allProgressRecords.filter(p => p.student_id === student.id);
+    }
+
+    const studentSubmissions = (AppState.submissions || []).filter(sub => sub.student_id === student.id);
+    const isCurrentActiveStudent = (AppState.user?.id === student.id);
 
     // Evaluasi data capaian per materi
     let completedCount = 0;
@@ -7659,16 +7807,43 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
       const isDrive = typeLower === 'tugas_drive' || typeLower === 'tugas';
       const isZoom = typeLower === 'tugas_zoom';
 
-      const progressItem = AppState.progressData?.[u.id];
-      const isDone = u.completed || AppState.progressMap?.[u.id] || (progressItem && progressItem.is_passed !== false);
+      const progItem = studentProgressRecords.find(p => p.content_id === u.id);
+      const subItem = studentSubmissions.find(s => s.content_id === u.id && s.approval_status === 'approved');
+
+      const isDone = Boolean(
+        (progItem && (progItem.status === 'Selesai' || progItem.is_passed !== false)) ||
+        subItem ||
+        (isCurrentActiveStudent && (u.completed || AppState.progressMap?.[u.id]))
+      );
       if (isDone) completedCount++;
 
       let scoreLabel = '-';
       if (isQuiz) {
-        const sc = progressItem?.score ?? (AppState.lastQuizResults?.[u.id]?.score ?? (isDone ? 85 : 0));
-        scoreLabel = `${sc} / 100`;
-        totalScore += sc;
-        scoreCount++;
+        let sc = null;
+        if (progItem && typeof progItem.score === 'number') sc = progItem.score;
+        else if (isCurrentActiveStudent && AppState.lastQuizResults?.[u.id]?.score !== undefined) sc = AppState.lastQuizResults[u.id].score;
+        else if (isCurrentActiveStudent && AppState.progressData?.[u.id]?.score !== undefined) sc = AppState.progressData[u.id].score;
+        else if (isDone) sc = 85;
+
+        if (sc !== null) {
+          scoreLabel = `${sc} / 100`;
+          totalScore += sc;
+          scoreCount++;
+        } else {
+          scoreLabel = '-';
+        }
+      } else if (isDrive) {
+        let sc = subItem?.score ?? (progItem?.score ?? (isDone ? 90 : null));
+        if (sc !== null) {
+          scoreLabel = `${sc} / 100`;
+          totalScore += sc;
+          scoreCount++;
+        } else {
+          scoreLabel = isDone ? '100 / 100' : '-';
+        }
+      } else if (isZoom) {
+        // Catatan 4: Sesi Zoom tidak menggunakan skor nilai
+        scoreLabel = isDone ? 'Terlaksana' : '-';
       } else if (isDone) {
         scoreLabel = '100 / 100';
       }
@@ -7698,7 +7873,7 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     }).join('');
 
     const progressPct = totalUnits > 0 ? Math.round((completedCount / totalUnits) * 100) : 0;
-    const avgScore = scoreCount > 0 ? Math.round(totalScore / scoreCount) : (progressPct >= 100 ? 90 : 80);
+    const avgScore = scoreCount > 0 ? Math.round(totalScore / scoreCount) : (completedCount > 0 ? 85 : 0);
     const isGraduated = progressPct >= 100;
     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     const docId = `CH/REP/${new Date().getFullYear()}/${String(Math.abs(course.id.split('-')[0].hashCode?.() || 7421)).substring(0, 4)}/${Math.floor(1000 + Math.random() * 9000)}`;
@@ -8062,20 +8237,41 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
   }
   window.exportPDF = exportPDF;
 
-  function exportBatchPDF() {
+  async function exportBatchPDF() {
     const students = AppState.students || [];
     const courses = AppState.courses || [];
     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     const docId = `CH/BATCH/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const sb = typeof getSupabase === 'function' ? getSupabase() : null;
+    let allProg = [];
+    if (sb && !AppState.isDemoMode) {
+      try {
+        const { data, error } = await sb.from('progress').select('*');
+        if (!error && Array.isArray(data)) allProg = data;
+      } catch (e) {
+        console.warn('Gagal ambil data batch progress:', e);
+      }
+    }
+    if (allProg.length === 0 && AppState.allProgressRecords) {
+      allProg = AppState.allProgressRecords;
+    }
+
+    const totalUnitsInstitution = courses.reduce((acc, c) => acc + (c.contents?.length || 0), 0) || 1;
+
     const rows = students.map((s, idx) => {
-      // Hitung progress agregat
-      const studentCourses = courses.filter(c => true);
-      const totalUnits = studentCourses.reduce((acc, c) => acc + (c.contents?.length || 0), 0);
-      const pct = s.status === 'Aktif' ? (idx % 2 === 0 ? 100 : 75) : 35;
+      const myProg = allProg.filter(p => p.student_id === s.id);
+      const completedUnits = myProg.filter(p => p.status === 'Selesai' || p.is_passed !== false).length;
+      const pct = Math.min(100, Math.round((completedUnits / totalUnitsInstitution) * 100));
+
+      const scoredItems = myProg.filter(p => typeof p.score === 'number' && p.score !== null);
+      const avg = scoredItems.length > 0
+        ? Math.round(scoredItems.reduce((acc, p) => acc + p.score, 0) / scoredItems.length)
+        : (pct >= 100 ? 90 : (pct > 0 ? 80 : '-'));
+
       const statusBadge = pct >= 100 
         ? '<span class="tag-selesai">✅ LULUS</span>' 
-        : '<span class="tag-proses">⏳ PROSES</span>';
+        : (pct > 0 ? '<span class="tag-proses">⏳ PROSES</span>' : '<span style="color:#94a3b8;font-size:7.5pt;padding:2px 6px;border-radius:4px;background:#f8fafc;font-weight:700;">BELUM MULAI</span>');
 
       return `
         <tr>
@@ -8084,7 +8280,7 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
           <td>${escHtml(s.email)}</td>
           <td style="text-align:center;">${escHtml(s.class || 'Kelas X')}</td>
           <td style="text-align:center;font-weight:700;">${pct}%</td>
-          <td style="text-align:center;font-weight:700;color:#0f766e;">${pct >= 100 ? '92' : '82'}</td>
+          <td style="text-align:center;font-weight:700;color:#0f766e;">${avg}</td>
           <td style="text-align:center;">${statusBadge}</td>
         </tr>
       `;
