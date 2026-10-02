@@ -949,17 +949,48 @@
   async function loadAssignmentSubmissions(sb) {
     let submissions = [];
     if (sb) {
+      // 1. Coba baca dari assignment_submissions jika tabel sudah dibuat
       try {
         const { data, error } = await sb.from('assignment_submissions').select('*').order('submitted_at', { ascending: false });
         if (!error && data && data.length > 0) {
           submissions = data;
         }
       } catch (e) {
-        console.warn('Gagal memuat assignment_submissions dari Supabase:', e);
+        console.warn('Tabel assignment_submissions belum tersedia:', e);
+      }
+
+      // 2. Jika assignment_submissions belum ada atau kosong, muat dari tabel progress Supabase!
+      if (!submissions || submissions.length === 0) {
+        try {
+          const { data: progData, error: progErr } = await sb.from('progress').select('*');
+          if (!progErr && progData && progData.length > 0) {
+            progData.forEach(row => {
+              if (row.answers_data && (row.answers_data.type === 'drive' || row.answers_data.type === 'zoom' || row.answers_data.drive_url)) {
+                const sub = row.answers_data;
+                const student = AppState.students.find(st => st.id === row.student_id);
+                submissions.push({
+                  ...sub,
+                  id: sub.id || row.id,
+                  course_id: row.course_id,
+                  content_id: row.content_id,
+                  student_id: row.student_id,
+                  student_name: sub.student_name || student?.name || 'Peserta Didik',
+                  student_email: sub.student_email || student?.email || '',
+                  approval_status: sub.approval_status || (row.status === 'Selesai' ? 'approved' : (row.status === 'Perlu Revisi' ? 'rejected' : 'pending')),
+                  score: row.score !== null && row.score !== undefined ? row.score : sub.score,
+                  tutor_feedback: sub.tutor_feedback || row.notes || '',
+                  submitted_at: sub.submitted_at || row.completed_at || new Date().toISOString()
+                });
+              }
+            });
+          }
+        } catch (err) {
+          console.warn('Gagal memuat tugas dari progress Supabase:', err);
+        }
       }
     }
 
-    // Jika Supabase kosong / offline, muat dari localStorage
+    // 3. Fallback jika offline / lokal
     if (!submissions || submissions.length === 0) {
       try {
         const local = localStorage.getItem('lms_submissions');
@@ -970,7 +1001,6 @@
     }
 
     AppState.submissions = submissions || [];
-    updatePendingBadge();
     updatePendingBadge();
   }
 
@@ -988,6 +1018,7 @@
 
     const sb = typeof getSupabase === 'function' ? getSupabase() : null;
     if (sb) {
+      // 1. Coba simpan ke assignment_submissions
       try {
         const payload = {
           course_id: sub.course_id,
@@ -1008,8 +1039,24 @@
           updated_at: new Date().toISOString()
         };
         await sb.from('assignment_submissions').upsert(payload, { onConflict: 'student_id,content_id' });
-      } catch (err) {
-        console.warn('Simpan ke assignment_submissions Supabase fallback ke local:', err);
+      } catch (err) {}
+
+      // 2. Simpan juga ke tabel progress Supabase (cloud fallback yang selalu ada di Supabase)
+      try {
+        const progressPayload = {
+          course_id: sub.course_id,
+          content_id: sub.content_id,
+          student_id: sub.student_id,
+          status: sub.approval_status === 'approved' ? 'Selesai' : (sub.approval_status === 'rejected' ? 'Perlu Revisi' : 'Menunggu Review'),
+          score: sub.score || null,
+          answers_data: sub,
+          notes: sub.student_notes || null,
+          completed_at: new Date().toISOString()
+        };
+        await sb.from('progress').upsert(progressPayload, { onConflict: 'student_id,content_id' });
+        console.log('✅ Submisi tugas tersimpan ke Supabase (tabel progress).');
+      } catch (pErr) {
+        console.warn('Gagal sinkronisasi submisi ke progress Supabase:', pErr);
       }
     }
 
@@ -2824,8 +2871,14 @@
     } else {
       // MATERI TEKS / VIDEO
       if (currentUnit.embedUrl) {
-        const isDirectVideo = currentUnit.embedUrl.endsWith('.mp4') || currentUnit.embedUrl.endsWith('.webm') || currentUnit.embedUrl.includes('/storage/v1/object/public/') || currentUnit.type === 'Video';
-        const isYoutube = currentUnit.embedUrl.includes('youtube') || currentUnit.embedUrl.includes('youtu.be');
+        const isYoutube = currentUnit.embedUrl.includes('youtube.com') || currentUnit.embedUrl.includes('youtu.be');
+        const isDirectVideo = !isYoutube && (
+          currentUnit.embedUrl.toLowerCase().includes('.mp4') ||
+          currentUnit.embedUrl.toLowerCase().includes('.webm') ||
+          currentUnit.embedUrl.toLowerCase().includes('.ogg') ||
+          currentUnit.embedUrl.toLowerCase().includes('/storage/') ||
+          typeLower === 'video'
+        );
 
         if (isDirectVideo && !isYoutube) {
           contentHtml = `
@@ -3567,7 +3620,12 @@
       const savedTime = parseFloat(AppState.unitVideoElapsed[currentUnit.id] || localStorage.getItem('lms_video_elapsed_' + currentUnit.id) || '0');
       let maxWatchedTime = isNaN(savedTime) ? 0 : savedTime;
 
-      // Posisikan ke detik terakhir yang pernah ditonton
+      // Posisikan ke detik terakhir yang pernah ditonton setelah metadata video siap
+      videoEl.addEventListener('loadedmetadata', () => {
+        if (maxWatchedTime > 1 && videoEl.currentTime < maxWatchedTime) {
+          try { videoEl.currentTime = maxWatchedTime; } catch (e) {}
+        }
+      });
       if (maxWatchedTime > 1 && videoEl.currentTime < maxWatchedTime) {
         try { videoEl.currentTime = maxWatchedTime; } catch (e) {}
       }
@@ -3596,6 +3654,14 @@
       videoEl.addEventListener('play', () => {
         if (timerBadge && timerBadge.classList.contains('paused')) {
           timerBadge.classList.remove('paused');
+        }
+      });
+
+      // ANTI-SKIP SEGERA SAAT USER MENCOBA GESER SCRUBBER
+      videoEl.addEventListener('seeking', () => {
+        if (videoEl.currentTime > maxWatchedTime + 1.5) {
+          videoEl.currentTime = maxWatchedTime;
+          showToast('🔒 Anda tidak dapat melompati bagian video yang belum ditonton.', 'warning');
         }
       });
 
