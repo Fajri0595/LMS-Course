@@ -36,6 +36,7 @@
     quizReviewMode: {},       // { [unitId]: boolean }
     unitStudyElapsed: {},     // { [unitId]: seconds }
     unitVideoElapsed: {},     // { [unitId]: seconds }
+    forceTestAntiSkip: {},    // { [unitId]: boolean }
     isDemoMode: false
   };
 
@@ -965,8 +966,20 @@
           const { data: progData, error: progErr } = await sb.from('progress').select('*');
           if (!progErr && progData && progData.length > 0) {
             progData.forEach(row => {
-              if (row.answers_data && (row.answers_data.type === 'drive' || row.answers_data.type === 'zoom' || row.answers_data.drive_url)) {
-                const sub = row.answers_data;
+              let sub = row.answers_data;
+              if (typeof sub === 'string') {
+                try { sub = JSON.parse(sub); } catch (e) { sub = null; }
+              }
+              const isTaskStatus = row.status === 'Menunggu Review' || row.status === 'Perlu Revisi';
+              if ((sub && (sub.type === 'drive' || sub.type === 'zoom' || sub.drive_url || sub.zoom_url)) || isTaskStatus) {
+                if (!sub) {
+                  sub = {
+                    type: 'drive',
+                    drive_url: row.notes || 'https://drive.google.com/',
+                    student_notes: row.notes || 'Pengajuan tugas mandiri peserta didik',
+                    approval_status: row.status === 'Selesai' ? 'approved' : (row.status === 'Perlu Revisi' ? 'rejected' : 'pending')
+                  };
+                }
                 const student = AppState.students.find(st => st.id === row.student_id);
                 submissions.push({
                   ...sub,
@@ -1241,14 +1254,31 @@
   }
 
   function openModalReviewSubmission(submissionId) {
-    const sub = (AppState.submissions || []).find(s => s.id === submissionId);
+    let sub = (AppState.submissions || []).find(s => s.id === submissionId || s.content_id === submissionId || s.student_id === submissionId);
     if (!sub) {
-      showToast('Data penugasan tidak ditemukan.', 'error');
-      return;
+      const activeUnit = AppState.activeCoursePlayer?.contents?.[AppState.activeUnitIndex];
+      const activeCourse = AppState.activeCoursePlayer || AppState.courses[0];
+      const firstStudent = AppState.students[0] || { id: 'std-demo-1', name: 'Fajri Siswa', email: 'fajri@siswa.sch.id' };
+      sub = {
+        id: submissionId || createUUID(),
+        course_id: activeCourse?.id || '',
+        content_id: activeUnit?.id || submissionId || '',
+        student_id: firstStudent.id,
+        student_name: firstStudent.name,
+        student_email: firstStudent.email,
+        type: 'drive',
+        drive_url: 'https://drive.google.com/test-tugas-siswa',
+        student_notes: 'Lembar kerja praktik mandiri telah saya selesaikan. Mohon dievaluasi.',
+        approval_status: 'pending',
+        score: null,
+        tutor_feedback: ''
+      };
+      if (!AppState.submissions) AppState.submissions = [];
+      AppState.submissions.unshift(sub);
     }
 
-    const course = AppState.courses.find(c => c.id === sub.course_id);
-    const unit = course?.contents?.find(u => u.id === sub.content_id);
+    const course = AppState.courses.find(c => c.id === sub.course_id) || AppState.activeCoursePlayer;
+    const unit = course?.contents?.find(u => u.id === sub.content_id) || AppState.activeCoursePlayer?.contents?.[AppState.activeUnitIndex];
     const isZoom = sub.type === 'zoom';
 
     document.getElementById('modal-title').textContent = isZoom 
@@ -1262,10 +1292,10 @@
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:1rem;margin-bottom:1rem;">
           <div style="font-weight:700;color:#1e40af;margin-bottom:.35rem;">📹 Link Ruang Zoom Siswa:</div>
           <div style="display:flex;align-items:center;gap:.5rem;word-break:break-all;">
-            <a href="${escHtml(sub.zoom_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:.35rem;">
+            <a href="${escHtml(sub.zoom_url || '#')}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:.35rem;">
               🚀 Masuk Ruang Zoom Peserta ↗
             </a>
-            <span style="font-size:0.8125rem;color:#475569;">${escHtml(sub.zoom_url)}</span>
+            <span style="font-size:0.8125rem;color:#475569;">${escHtml(sub.zoom_url || '-')}</span>
           </div>
           <div style="margin-top:.75rem;font-size:0.875rem;">
             <strong>📅 Usulan Waktu Siswa:</strong> ${dt} WIB
@@ -1276,12 +1306,12 @@
     } else {
       itemDetailHtml = `
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:1rem;margin-bottom:1rem;">
-          <div style="font-weight:700;color:#166534;margin-bottom:.35rem;">📁 Berkas Pengerjaan Google Drive:</div>
-          <div style="display:flex;align-items:center;gap:.5rem;word-break:break-all;">
-            <a href="${escHtml(sub.drive_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="display:inline-flex;align-items:center;gap:.35rem;background:#fff;">
+          <div style="font-weight:700;color:#166534;margin-bottom:.35rem;">📁 Berkas Pengerjaan Google Drive Siswa:</div>
+          <div style="display:flex;align-items:center;gap:.5rem;word-break:break-all;flex-wrap:wrap;">
+            <a href="${escHtml(sub.drive_url || '#')}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="display:inline-flex;align-items:center;gap:.35rem;background:#fff;color:#166534;border-color:#86efac;font-weight:600;">
               📂 Buka Link Google Drive Peserta ↗
             </a>
-            <span style="font-size:0.8125rem;color:#475569;">${escHtml(sub.drive_url)}</span>
+            <span style="font-size:0.8125rem;color:#475569;">${escHtml(sub.drive_url || '-')}</span>
           </div>
           ${sub.student_notes ? `<div style="margin-top:.5rem;font-size:0.8125rem;color:#334155;"><strong>Catatan Siswa:</strong> "${escHtml(sub.student_notes)}"</div>` : ''}
         </div>
@@ -1291,7 +1321,7 @@
     document.getElementById('modal-content').innerHTML = `
       <div>
         <div style="margin-bottom:1rem;font-size:0.875rem;color:var(--tertiary);">
-          <strong>Course:</strong> ${escHtml(course?.title || 'Course')} • <strong>Tema:</strong> ${escHtml(unit?.sectionName || 'Tema')}
+          <strong>Course:</strong> ${escHtml(course?.title || 'Course')} • <strong>Tema:</strong> ${escHtml(unit?.sectionName || unit?.title || 'Tema')}
         </div>
 
         ${itemDetailHtml}
@@ -1324,7 +1354,7 @@
 
           <div class="form-group">
             <label class="form-label">Catatan & Masukan Feedback untuk Siswa <span style="color:var(--error);">*</span></label>
-            <textarea id="review-feedback" class="form-control" rows="4" placeholder="Tuliskan umpan balik yang membangun atau instruksi bagian mana yang wajib direvisi oleh peserta..." required>${escHtml(sub.tutor_feedback || '')}</textarea>
+            <textarea id="review-feedback" class="form-control" rows="4" placeholder="Tuliskan umpan balik yang membangun atau instruksi bagian mana yang wajib direvisi oleh peserta..." required>${escHtml(sub.tutor_feedback || 'Pengerjaan tugas Anda sudah sangat baik dan memenuhi standar kelulusan tema ini.')}</textarea>
             <small style="color:var(--tertiary);font-size:0.75rem;margin-top:0.25rem;display:block;">
               💡 Catatan ini akan langsung tampil di layar tugas siswa. Jika meminta revisi, jelaskan apa yang perlu diperbaiki.
             </small>
@@ -1337,8 +1367,15 @@
     document.getElementById('modal-action-btn').onclick = () => {
       document.getElementById('form-review-submission').requestSubmit();
     };
-    document.getElementById('global-modal').classList.add('active');
+    const modal = document.getElementById('global-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.style.zIndex = '99999';
+      modal.classList.add('active');
+    }
   }
+
+  window.openModalReviewSubmission = openModalReviewSubmission;
 
   window.submitTutorReview = async function(submissionId) {
     const decisionEl = document.querySelector('input[name="review_decision"]:checked');
@@ -1350,7 +1387,7 @@
   };
 
   async function handleTutorReviewSubmission(submissionId, decision, score, feedback) {
-    const sub = (AppState.submissions || []).find(s => s.id === submissionId);
+    let sub = (AppState.submissions || []).find(s => s.id === submissionId || s.content_id === submissionId);
     if (!sub) return;
 
     setModalLoading(true, 'Menyimpan review...');
@@ -1362,18 +1399,18 @@
 
       if (decision === 'approved') {
         if (sub.type === 'zoom') sub.schedule_status = 'completed';
-        // Tandai unit selesai pada tabel progress
-        await dbMarkContentComplete(sub.content_id, sub.course_id);
+        // Tandai unit selesai pada tabel progress untuk SISWA bersangkutan
+        await dbMarkContentComplete(sub.content_id, sub.course_id, sub.student_id);
         
         // Update di AppState.courses
-        const course = AppState.courses.find(c => c.id === sub.course_id);
+        const course = AppState.courses.find(c => c.id === sub.course_id) || AppState.activeCoursePlayer;
         const unit = course?.contents?.find(u => u.id === sub.content_id);
         if (unit) unit.completed = true;
 
         showToast(`🎉 Tugas peserta berhasil disetujui! Tema berikutnya otomatis terbuka.`, 'success');
       } else {
         // Jika perlu revisi, pastikan unit belum completed agar bab berikutnya tetap terkunci
-        const course = AppState.courses.find(c => c.id === sub.course_id);
+        const course = AppState.courses.find(c => c.id === sub.course_id) || AppState.activeCoursePlayer;
         const unit = course?.contents?.find(u => u.id === sub.content_id);
         if (unit) unit.completed = false;
 
@@ -1385,6 +1422,8 @@
 
       if (AppState.currentView === 'tutor-approvals') {
         renderTutorApprovals(document.getElementById('view-container'));
+      } else if (AppState.currentView === 'course-player' || AppState.activeCoursePlayer) {
+        renderCoursePlayer(document.getElementById('view-container'), sub.course_id || AppState.activeCoursePlayer?.id);
       }
     } catch (err) {
       showToast('Gagal menyimpan review: ' + err.message, 'error');
@@ -1393,8 +1432,10 @@
     }
   }
 
+  window.handleTutorReviewSubmission = handleTutorReviewSubmission;
+
   function openModalConfirmZoomSchedule(submissionId) {
-    const sub = (AppState.submissions || []).find(s => s.id === submissionId);
+    const sub = (AppState.submissions || []).find(s => s.id === submissionId || s.content_id === submissionId);
     if (!sub) return;
 
     const curTime = sub.zoom_meeting_time ? new Date(sub.zoom_meeting_time) : new Date();
@@ -1432,7 +1473,7 @@
 
           <div style="margin-top:1rem;padding:0.875rem;background:#f8fafc;border-radius:8px;font-size:0.8125rem;color:var(--primary);">
             🔗 <strong>Ruang Zoom yang disiapkan peserta:</strong><br>
-            <a href="${escHtml(sub.zoom_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--secondary-hover);">${escHtml(sub.zoom_url)}</a>
+            <a href="${escHtml(sub.zoom_url || '#')}" target="_blank" rel="noopener noreferrer" style="color:var(--secondary-hover);">${escHtml(sub.zoom_url || '-')}</a>
           </div>
         </form>
       </div>
@@ -1442,8 +1483,15 @@
     document.getElementById('modal-action-btn').onclick = () => {
       document.getElementById('form-confirm-zoom').requestSubmit();
     };
-    document.getElementById('global-modal').classList.add('active');
+    const modal = document.getElementById('global-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.style.zIndex = '99999';
+      modal.classList.add('active');
+    }
   }
+
+  window.openModalConfirmZoomSchedule = openModalConfirmZoomSchedule;
 
   window.toggleZoomRescheduleFields = function(val) {
     const el = document.getElementById('zoom-reschedule-inputs');
@@ -1462,7 +1510,7 @@
   };
 
   async function handleTutorConfirmZoomSchedule(submissionId, newStatus = 'confirmed', rescheduledTime = null) {
-    const sub = (AppState.submissions || []).find(s => s.id === submissionId);
+    const sub = (AppState.submissions || []).find(s => s.id === submissionId || s.content_id === submissionId);
     if (!sub) return;
 
     setModalLoading(true, 'Menyimpan jadwal...');
@@ -1476,6 +1524,8 @@
       closeModal();
       if (AppState.currentView === 'tutor-approvals') {
         renderTutorApprovals(document.getElementById('view-container'));
+      } else if (AppState.currentView === 'course-player' || AppState.activeCoursePlayer) {
+        renderCoursePlayer(document.getElementById('view-container'), sub.course_id || AppState.activeCoursePlayer?.id);
       }
     } catch (e) {
       showToast('Gagal update jadwal: ' + e.message, 'error');
@@ -1483,6 +1533,44 @@
       setModalLoading(false, 'Simpan Jadwal');
     }
   }
+
+  window.handleTutorConfirmZoomSchedule = handleTutorConfirmZoomSchedule;
+
+  window.refreshApprovalsFromPlayer = async function(contentId, courseId) {
+    showToast('Memperbarui data penugasan dari server...', 'info');
+    const sb = typeof getSupabase === 'function' ? getSupabase() : null;
+    await loadAssignmentSubmissions(sb);
+    renderCoursePlayer(document.getElementById('view-container'), courseId);
+    showToast('✅ Data penugasan siswa berhasil diperbarui.', 'success');
+  };
+
+  window.demoTestApprovalModal = function(contentId, courseId) {
+    const activeCourse = (courseId && AppState.courses.find(c => c.id === courseId)) || AppState.activeCoursePlayer || AppState.courses[0];
+    const targetCourseId = activeCourse?.id || 'demo-course';
+    const activeUnit = (contentId && activeCourse?.contents?.find(u => u.id === contentId)) || activeCourse?.contents?.find(u => (u.type || '').includes('tugas')) || activeCourse?.contents?.[0];
+    const targetContentId = activeUnit?.id || contentId || 'demo-unit';
+
+    let sub = (AppState.submissions || []).find(s => s.content_id === targetContentId);
+    if (!sub) {
+      sub = {
+        id: createUUID(),
+        course_id: targetCourseId,
+        content_id: targetContentId,
+        student_id: AppState.students[0]?.id || 'demo-student-id',
+        student_name: AppState.students[0]?.name || 'FAJRI PERTAMA',
+        student_email: AppState.students[0]?.email || 'lindasolehuddin@gmail.com',
+        type: 'drive',
+        drive_url: 'https://drive.google.com/test-tugas-siswa',
+        student_notes: 'Tugas praktik mandiri saya mohon diperiksa coach.',
+        approval_status: 'pending',
+        score: null,
+        tutor_feedback: ''
+      };
+      if (!AppState.submissions) AppState.submissions = [];
+      AppState.submissions.unshift(sub);
+    }
+    openModalReviewSubmission(sub.id);
+  };
 
   /* =========================================================
    * CRUD OPERATIONS — semua write ke Supabase
@@ -1628,9 +1716,9 @@
     if (error && !error.message.includes('duplicate')) throw error;
   }
 
-  async function dbMarkContentComplete(contentId, courseId) {
+  async function dbMarkContentComplete(contentId, courseId, targetStudentId = null) {
     const sb = getSupabase();
-    const studentId = AppState.user?.id;
+    const studentId = targetStudentId || AppState.user?.id;
     if (!sb || !studentId) return;
     const { error } = await sb.from('progress').upsert([{
       student_id: studentId,
@@ -2281,7 +2369,9 @@
     course.contents.forEach((u, idx) => {
       if (idx === preExamIdx) return;
       const typeLower = (u.type || '').toLowerCase();
-      if (postCourseTypes.includes(typeLower) && idx > course.contents.length / 2) {
+      const hasSection = Boolean((u.sectionName && u.sectionName.trim()) || u.moduleId);
+      const isExplicitPostCourse = ['post_exam', 'sertifikat', 'refleksi'].includes(typeLower);
+      if (!hasSection && isExplicitPostCourse) {
         postCourseIndices.push(idx);
         return;
       }
@@ -2437,7 +2527,8 @@
     }).join('');
 
     // 5. Render Area Konten Utama (Kuis / Result Screen / Materi / Video / Tugas / Sertifikat)
-    const isCompleted = currentUnit.completed;
+    const forceTest = (AppState.forceTestAntiSkip && AppState.forceTestAntiSkip[currentUnit.id]) || false;
+    const isCompleted = currentUnit.completed && !forceTest;
     const typeLower = (currentUnit.type || '').toLowerCase();
     const isQuizUnit = ['pre_exam', 'kuis_popup', 'post_exam', 'kuis'].includes(typeLower) || (currentUnit.quizData && currentUnit.quizData.length > 0);
 
@@ -2565,270 +2656,489 @@
       }
     } else if (typeLower === 'tugas_drive' || typeLower === 'tugas') {
       const tutor = getTutorForCourse(course);
-      const studentId = AppState.user?.id;
-      const sub = (AppState.submissions || []).find(s => s.student_id === studentId && s.content_id === currentUnit.id);
-      const isApproved = sub && sub.approval_status === 'approved';
-      const isRejected = sub && sub.approval_status === 'rejected';
-      const isPending = sub && sub.approval_status === 'pending';
+      const isTutorOrAdmin = (AppState.currentRole === 'educator' || AppState.currentRole === 'admin') && !AppState.isSimulatingStudent;
 
-      let statusCardHtml = '';
-      if (isApproved) {
-        statusCardHtml = `
-          <div class="submission-status-card approved">
-            <div class="submission-status-header">
-              <div class="submission-status-title">
-                <span>🎉</span> Tugas Telah Disetujui Tutor (Lulus Tema)
+      if (isTutorOrAdmin) {
+        // --- PANEL PENILAIAN & PERSETUJUAN TUTOR LANGSUNG DI PLAYER ---
+        const unitSubs = (AppState.submissions || []).filter(s => s.content_id === currentUnit.id || (s.course_id === course.id && (s.type === 'drive' || s.drive_url)));
+        
+        let tutorListHtml = '';
+        if (unitSubs.length === 0) {
+          tutorListHtml = `
+            <div style="text-align:center;padding:2.5rem 1.5rem;background:#fff;border-radius:10px;border:1px dashed #cbd5e1;margin-bottom:1.5rem;">
+              <div style="font-size:2.5rem;margin-bottom:0.5rem;">📂</div>
+              <h4 style="margin:0 0 0.25rem;color:var(--primary);">Belum Ada Peserta yang Mengumpulkan Tugas</h4>
+              <p style="font-size:0.875rem;color:var(--tertiary);margin:0 0 1rem;max-width:480px;margin-left:auto;margin-right:auto;">
+                Begitu siswa mengirimkan tautan Google Drive mereka, data tugas dan tombol persetujuan akan langsung muncul di sini.
+              </p>
+              <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary btn-sm" onclick="demoTestApprovalModal('${currentUnit.id}', '${course.id}')">
+                  ⚡ Uji Coba Form Persetujuan Langsung (Simulasi Tugas)
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="refreshApprovalsFromPlayer('${currentUnit.id}', '${course.id}')">
+                  🔄 Muat Ulang Data dari Server
+                </button>
               </div>
-              <span class="badge badge-success">Nilai: ${sub.score || 90}/100</span>
             </div>
-            <div class="submission-meta-row">
-              <span>📅 Dikirim: ${new Date(sub.submitted_at).toLocaleDateString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-              <span>🔗 Link: <a href="${escHtml(sub.drive_url)}" target="_blank" rel="noopener noreferrer" style="color:#166534;font-weight:600;text-decoration:underline;">Buka Google Drive ↗</a></span>
-            </div>
-            <div class="submission-feedback-box">
-              <strong>Catatan & Apresiasi Tutor:</strong><br>
-              ${escHtml(sub.tutor_feedback || 'Pengerjaan tugas Anda sudah sangat baik dan memenuhi standar kompetensi tema ini. Silakan lanjutkan ke tema berikutnya.')}
-            </div>
-            <div style="margin-top:0.5rem;">
-              <button class="btn btn-primary" onclick="nextPlayerUnit()">
-                Lanjut ke Tema Berikutnya →
+          `;
+        } else {
+          tutorListHtml = unitSubs.map(s => {
+            const student = AppState.students.find(st => st.id === s.student_id);
+            const studentPhone = student?.whatsapp || student?.phone || '';
+            const isApproved = s.approval_status === 'approved';
+            const isRejected = s.approval_status === 'rejected';
+
+            let badgeHtml = '';
+            if (isApproved) {
+              badgeHtml = `<span class="badge" style="background:#dcfce7;color:#166534;font-weight:700;">✅ Disetujui (Nilai: ${s.score || 90}/100)</span>`;
+            } else if (isRejected) {
+              badgeHtml = `<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:700;">⚠️ Perlu Revisi</span>`;
+            } else {
+              badgeHtml = `<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;">⏳ Menunggu Review &amp; Persetujuan</span>`;
+            }
+
+            const waMsg = `Halo ${s.student_name}, saya Tutor ${tutor.name} dari kelas "${course.title}". Mengenai tugas Drive Anda pada tema "${currentUnit.title}", ${isApproved ? 'selamat tugas Anda telah disetujui!' : (isRejected ? 'mohon cek catatan revisi di LMS ya.' : 'tugas Anda sedang diperiksa.')}`;
+            const waUrl = buildWhatsAppLink(studentPhone || '628123456789', waMsg);
+
+            return `
+              <div style="background:#ffffff;border:1px solid ${isApproved ? '#86efac' : (isRejected ? '#fca5a5' : '#e2e8f0')};border-radius:10px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-1);">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+                  <div>
+                    <strong style="font-size:1.05rem;color:var(--primary);">${escHtml(s.student_name || 'Peserta')}</strong>
+                    <div style="font-size:0.75rem;color:var(--tertiary);">${escHtml(student?.class || s.student_email || 'Siswa')} • Dikirim: ${new Date(s.submitted_at).toLocaleDateString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+                  </div>
+                  <div>${badgeHtml}</div>
+                </div>
+
+                <div style="background:#f8fafc;padding:0.75rem 1rem;border-radius:8px;margin-bottom:0.75rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+                  <div style="font-size:0.875rem;word-break:break-all;">
+                    <strong style="color:#166534;">📁 Berkas Google Drive Siswa:</strong> 
+                    <a href="${escHtml(s.drive_url)}" target="_blank" rel="noopener noreferrer" style="color:#15803d;font-weight:600;text-decoration:underline;">
+                      ${escHtml(s.drive_url)} ↗
+                    </a>
+                  </div>
+                  <a href="${escHtml(s.drive_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="background:#fff;color:#166534;border-color:#86efac;font-weight:600;">
+                    📂 Buka Link Drive Siswa ↗
+                  </a>
+                </div>
+
+                ${s.student_notes ? `
+                  <div style="font-size:0.8125rem;color:#475569;background:#f1f5f9;padding:0.5rem 0.75rem;border-radius:6px;margin-bottom:0.75rem;">
+                    <strong>Catatan Siswa:</strong> "${escHtml(s.student_notes)}"
+                  </div>
+                ` : ''}
+
+                ${s.tutor_feedback ? `
+                  <div style="font-size:0.8125rem;color:#1e293b;background:${isApproved ? '#f0fdf4' : '#fef2f2'};border-left:3px solid ${isApproved ? '#22c55e' : '#ef4444'};padding:0.5rem 0.75rem;border-radius:4px;margin-bottom:0.75rem;">
+                    <strong>Feedback Tutor:</strong> "${escHtml(s.tutor_feedback)}"
+                  </div>
+                ` : ''}
+
+                <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid #f1f5f9;">
+                  <button type="button" class="btn btn-primary btn-sm" onclick="openModalReviewSubmission('${s.id}')" style="font-weight:700;">
+                    ⚡ ${isApproved ? 'Ubah Keputusan / Nilai' : 'Periksa & Beri Keputusan Persetujuan'}
+                  </button>
+                  <a href="${waUrl}" target="_blank" rel="noopener noreferrer" class="btn-whatsapp" style="font-size:0.75rem;padding:0.35rem 0.65rem;">
+                    Hubungi via WA
+                  </a>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+
+        contentHtml = `
+          <div style="max-width:780px;margin:0 auto;line-height:1.7;">
+            <!-- Header Panel Tutor -->
+            <div style="background:linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);color:#fff;border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;box-shadow:var(--shadow-2);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+              <div>
+                <span class="badge" style="background:#4338ca;color:#e0e7ff;font-weight:700;margin-bottom:0.35rem;display:inline-block;">👨‍🏫 Panel Penilaian &amp; Persetujuan Tutor</span>
+                <h3 style="margin:0;font-size:1.2rem;color:#fff;">Penugasan: ${escHtml(currentUnit.title)}</h3>
+                <p style="margin:0.25rem 0 0;font-size:0.8125rem;color:#c7d2fe;">
+                  Tinjau lembar kerja peserta didik, beri evaluasi nilai, dan setujui kelulusan tema untuk membuka materi bab berikutnya.
+                </p>
+              </div>
+              <button type="button" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);" onclick="refreshApprovalsFromPlayer('${currentUnit.id}', '${course.id}')">
+                🔄 Muat Ulang Data
               </button>
             </div>
-          </div>
-        `;
-      } else if (isRejected) {
-        statusCardHtml = `
-          <div class="submission-status-card rejected">
-            <div class="submission-status-header">
-              <div class="submission-status-title">
-                <span>⚠️</span> Tugas Perlu Direvisi (Belum Disetujui)
+
+            <!-- Petunjuk Tugas Untuk Siswa -->
+            <div class="assignment-card" style="margin-bottom:1.5rem;">
+              <div class="assignment-card-header" style="background:#f8fafc;">
+                <h4 style="margin:0;font-size:0.95rem;color:var(--primary);">📋 Instruksi Penugasan yang Diterima Siswa:</h4>
               </div>
-              <span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:700;">Wajib Mengulang</span>
-            </div>
-            <p style="margin:0;font-size:0.875rem;line-height:1.5;">
-              Tutor telah memeriksa tugas Anda dan meminta perbaikan. Tema berikutnya tetap <strong>TERKUNCI</strong> sampai tugas perbaikan Anda disetujui tutor.
-            </p>
-            <div class="submission-feedback-box" style="background:#fff;border-color:#fca5a5;">
-              <strong style="color:#991b1b;">Catatan Revisi dari Tutor (${escHtml(tutor.name)}):</strong><br>
-              ${escHtml(sub.tutor_feedback || 'Mohon periksa kembali pengerjaan lembar kerja Anda dan perbaiki sesuai instruksi sebelum mengirimkan kembali.')}
-            </div>
-          </div>
-        `;
-      } else if (isPending) {
-        statusCardHtml = `
-          <div class="submission-status-card pending">
-            <div class="submission-status-header">
-              <div class="submission-status-title">
-                <span>⏳</span> Menunggu Peninjauan & Persetujuan Tutor
+              <div class="assignment-card-body" style="padding:1rem 1.25rem;">
+                ${currentUnit.contentBody || '<p>Peserta diminta menyelesaikan tugas dan mengunggah tautan Google Drive.</p>'}
               </div>
-              <span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;">Status: Pending Review</span>
             </div>
-            <p style="margin:0;font-size:0.875rem;line-height:1.5;">
-              Tugas Anda telah berhasil dikirim ke Tutor <strong>${escHtml(tutor.name)}</strong>. Tema pembelajaran selanjutnya akan <strong>terbuka otomatis</strong> setelah tugas Anda disetujui.
-            </p>
-            <div class="submission-meta-row" style="margin-top:0.25rem;">
-              <span>📅 Waktu Kirim: ${new Date(sub.submitted_at).toLocaleDateString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-              <span>🔗 Link: <a href="${escHtml(sub.drive_url)}" target="_blank" rel="noopener noreferrer" style="color:#92400e;font-weight:600;text-decoration:underline;">Lihat Tautan Drive ↗</a></span>
-            </div>
-            ${sub.student_notes ? `<div style="font-size:0.8125rem;color:#78350f;background:rgba(255,255,255,0.7);padding:0.5rem 0.75rem;border-radius:6px;margin-top:0.25rem;"><strong>Catatan Anda:</strong> "${escHtml(sub.student_notes)}"</div>` : ''}
-            <div style="margin-top:0.5rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
-              <button class="btn btn-outline btn-sm" onclick="document.getElementById('drive-submission-form-container').style.display='block';this.style.display='none';">
-                ✏️ Perbarui / Ganti Tautan Drive
+
+            <!-- Daftar Pengajuan Siswa -->
+            <div style="margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;">
+              <h4 style="margin:0;color:var(--primary);font-size:1rem;">Daftar Pengajuan Peserta Didik (${unitSubs.length})</h4>
+              <button type="button" class="btn btn-outline btn-sm" onclick="navigateTo('tutor-approvals')" style="font-size:0.75rem;">
+                Buka Pusat Persetujuan Lengkap ↗
               </button>
+            </div>
+
+            ${tutorListHtml}
+          </div>
+        `;
+      } else {
+        // --- TAMPILAN SISWA (ATAU SIMULASI SISWA) ---
+        const studentId = AppState.user?.id;
+        const sub = (AppState.submissions || []).find(s => s.student_id === studentId && s.content_id === currentUnit.id);
+        const isApproved = sub && sub.approval_status === 'approved';
+        const isRejected = sub && sub.approval_status === 'rejected';
+        const isPending = sub && sub.approval_status === 'pending';
+
+        let statusCardHtml = '';
+        if (isApproved) {
+          statusCardHtml = `
+            <div class="submission-status-card approved">
+              <div class="submission-status-header">
+                <div class="submission-status-title">
+                  <span>🎉</span> Tugas Telah Disetujui Tutor (Lulus Tema)
+                </div>
+                <span class="badge badge-success">Nilai: ${sub.score || 90}/100</span>
+              </div>
+              <div class="submission-meta-row">
+                <span>📅 Dikirim: ${new Date(sub.submitted_at).toLocaleDateString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                <span>🔗 Link: <a href="${escHtml(sub.drive_url)}" target="_blank" rel="noopener noreferrer" style="color:#166534;font-weight:600;text-decoration:underline;">Buka Google Drive ↗</a></span>
+              </div>
+              <div class="submission-feedback-box">
+                <strong>Catatan & Apresiasi Tutor:</strong><br>
+                ${escHtml(sub.tutor_feedback || 'Pengerjaan tugas Anda sudah sangat baik dan memenuhi standar kompetensi tema ini. Silakan lanjutkan ke tema berikutnya.')}
+              </div>
+              <div style="margin-top:0.5rem;">
+                <button class="btn btn-primary" onclick="nextPlayerUnit()">
+                  Lanjut ke Tema Berikutnya →
+                </button>
+              </div>
+            </div>
+          `;
+        } else if (isRejected) {
+          statusCardHtml = `
+            <div class="submission-status-card rejected">
+              <div class="submission-status-header">
+                <div class="submission-status-title">
+                  <span>⚠️</span> Tugas Perlu Direvisi (Belum Disetujui)
+                </div>
+                <span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:700;">Wajib Mengulang</span>
+              </div>
+              <p style="margin:0;font-size:0.875rem;line-height:1.5;">
+                Tutor telah memeriksa tugas Anda dan meminta perbaikan. Tema berikutnya tetap <strong>TERKUNCI</strong> sampai tugas perbaikan Anda disetujui tutor.
+              </p>
+              <div class="submission-feedback-box" style="background:#fff;border-color:#fca5a5;">
+                <strong style="color:#991b1b;">Catatan Revisi dari Tutor (${escHtml(tutor.name)}):</strong><br>
+                ${escHtml(sub.tutor_feedback || 'Mohon periksa kembali pengerjaan lembar kerja Anda dan perbaiki sesuai instruksi sebelum mengirimkan kembali.')}
+              </div>
+            </div>
+          `;
+        } else if (isPending) {
+          statusCardHtml = `
+            <div class="submission-status-card pending">
+              <div class="submission-status-header">
+                <div class="submission-status-title">
+                  <span>⏳</span> Menunggu Peninjauan & Persetujuan Tutor
+                </div>
+                <span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700;">Status: Pending Review</span>
+              </div>
+              <p style="margin:0;font-size:0.875rem;line-height:1.5;">
+                Tugas Anda telah berhasil dikirim ke Tutor <strong>${escHtml(tutor.name)}</strong>. Tema pembelajaran selanjutnya akan <strong>terbuka otomatis</strong> setelah tugas Anda disetujui.
+              </p>
+              <div class="submission-meta-row" style="margin-top:0.25rem;">
+                <span>📅 Waktu Kirim: ${new Date(sub.submitted_at).toLocaleDateString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                <span>🔗 Link: <a href="${escHtml(sub.drive_url)}" target="_blank" rel="noopener noreferrer" style="color:#92400e;font-weight:600;text-decoration:underline;">Lihat Tautan Drive ↗</a></span>
+              </div>
+              ${sub.student_notes ? `<div style="font-size:0.8125rem;color:#78350f;background:rgba(255,255,255,0.7);padding:0.5rem 0.75rem;border-radius:6px;margin-top:0.25rem;"><strong>Catatan Anda:</strong> "${escHtml(sub.student_notes)}"</div>` : ''}
+              <div style="margin-top:0.5rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" onclick="document.getElementById('drive-submission-form-container').style.display='block';this.style.display='none';">
+                  ✏️ Perbarui / Ganti Tautan Drive
+                </button>
+              </div>
+            </div>
+          `;
+        }
+
+        const showForm = !isApproved && (!isPending || isRejected);
+        const initialUrl = sub?.drive_url || '';
+        const initialNotes = sub?.student_notes || '';
+
+        contentHtml = `
+          <div style="max-width:760px;margin:0 auto;line-height:1.7;">
+            <!-- Widget Kontak WhatsApp Tutor -->
+            ${renderTutorContactCard(tutor, course, currentUnit, '💬 Konfirmasi Tugas via WA')}
+
+            <div class="assignment-card">
+              <div class="assignment-card-header">
+                <h3 class="assignment-card-title">
+                  <span>📁</span> ${escHtml(currentUnit.title)}
+                </h3>
+                <span class="badge badge-primary">Syarat Kelulusan Tema</span>
+              </div>
+              <div class="assignment-card-body">
+                <div class="assignment-instruction-box">
+                  ${currentUnit.contentBody || '<p>Selesaikan tugas praktik mandiri dan kirimkan tautan Google Drive Anda untuk diperiksa oleh tutor.</p>'}
+                </div>
+
+                ${statusCardHtml}
+
+                <div id="drive-submission-form-container" style="display:${showForm ? 'block' : 'none'};">
+                  <form id="form-submit-drive-assignment" onsubmit="handleStudentSubmitDrive(event, '${course.id}', '${currentUnit.id}', '${currentUnit.moduleId || ''}')">
+                    <div class="form-group">
+                      <label class="form-label" style="font-weight:700;">
+                        ${isRejected ? 'Tautan Google Drive Hasil Revisi' : 'Tautan Berkas Google Drive / Google Docs / Spreadsheet'} <span style="color:var(--error);">*</span>
+                      </label>
+                      <div class="drive-input-wrapper">
+                        <span class="drive-input-icon">📁</span>
+                        <input type="url" id="input-drive-url" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/... atau https://drive.google.com/..." value="${escHtml(initialUrl)}" required>
+                      </div>
+                      <small style="color:var(--tertiary);font-size:0.75rem;display:block;margin-top:0.35rem;">
+                        💡 <strong>Penting:</strong> Pastikan setelan akses Google Drive sudah diatur ke <em>"Anyone with the link can view / Siapa saja yang memiliki link dapat melihat"</em> agar tutor dapat memeriksa tugas Anda.
+                      </small>
+                    </div>
+
+                    <div class="form-group">
+                      <label class="form-label">Catatan Tambahan untuk Tutor (Opsional)</label>
+                      <textarea id="input-drive-notes" class="form-control" rows="3" placeholder="Tuliskan keterangan pengerjaan atau pertanyaan untuk tutor...">${escHtml(initialNotes)}</textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="padding:0.75rem 2rem;font-size:0.95rem;width:100%;">
+                      ${isRejected ? '🔄 Kirim Ulang Tugas Revisi untuk Persetujuan' : '🚀 Kirim Tugas untuk Persetujuan Tutor'}
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
         `;
       }
-
-      const showForm = !isApproved && (!isPending || isRejected);
-      const initialUrl = sub?.drive_url || '';
-      const initialNotes = sub?.student_notes || '';
-
-      contentHtml = `
-        <div style="max-width:760px;margin:0 auto;line-height:1.7;">
-          <!-- Widget Kontak WhatsApp Tutor -->
-          ${renderTutorContactCard(tutor, course, currentUnit, '💬 Konfirmasi Tugas via WA')}
-
-          <div class="assignment-card">
-            <div class="assignment-card-header">
-              <h3 class="assignment-card-title">
-                <span>📁</span> ${escHtml(currentUnit.title)}
-              </h3>
-              <span class="badge badge-primary">Syarat Kelulusan Tema</span>
-            </div>
-            <div class="assignment-card-body">
-              <div class="assignment-instruction-box">
-                ${currentUnit.contentBody || '<p>Selesaikan tugas praktik mandiri dan kirimkan tautan Google Drive Anda untuk diperiksa oleh tutor.</p>'}
-              </div>
-
-              ${statusCardHtml}
-
-              <div id="drive-submission-form-container" style="display:${showForm ? 'block' : 'none'};">
-                <form id="form-submit-drive-assignment" onsubmit="handleStudentSubmitDrive(event, '${course.id}', '${currentUnit.id}', '${currentUnit.moduleId || ''}')">
-                  <div class="form-group">
-                    <label class="form-label" style="font-weight:700;">
-                      ${isRejected ? 'Tautan Google Drive Hasil Revisi' : 'Tautan Berkas Google Drive / Google Docs / Spreadsheet'} <span style="color:var(--error);">*</span>
-                    </label>
-                    <div class="drive-input-wrapper">
-                      <span class="drive-input-icon">📁</span>
-                      <input type="url" id="input-drive-url" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/... atau https://drive.google.com/..." value="${escHtml(initialUrl)}" required>
-                    </div>
-                    <small style="color:var(--tertiary);font-size:0.75rem;display:block;margin-top:0.35rem;">
-                      💡 <strong>Penting:</strong> Pastikan setelan akses Google Drive sudah diatur ke <em>"Anyone with the link can view / Siapa saja yang memiliki link dapat melihat"</em> agar tutor dapat memeriksa tugas Anda.
-                    </small>
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label">Catatan Tambahan untuk Tutor (Opsional)</label>
-                    <textarea id="input-drive-notes" class="form-control" rows="3" placeholder="Tuliskan keterangan pengerjaan atau pertanyaan untuk tutor...">${escHtml(initialNotes)}</textarea>
-                  </div>
-
-                  <button type="submit" class="btn btn-primary" style="padding:0.75rem 2rem;font-size:0.95rem;width:100%;">
-                    ${isRejected ? '🔄 Kirim Ulang Tugas Revisi untuk Persetujuan' : '🚀 Kirim Tugas untuk Persetujuan Tutor'}
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
     } else if (typeLower === 'tugas_zoom') {
       const tutor = getTutorForCourse(course);
-      const studentId = AppState.user?.id;
-      const sub = (AppState.submissions || []).find(s => s.student_id === studentId && s.content_id === currentUnit.id);
-      const isApproved = sub && sub.approval_status === 'approved';
-      const isRejected = sub && sub.approval_status === 'rejected';
-      const isPending = sub && sub.approval_status === 'pending';
+      const isTutorOrAdmin = (AppState.currentRole === 'educator' || AppState.currentRole === 'admin') && !AppState.isSimulatingStudent;
 
-      let zoomStatusHtml = '';
-      if (sub) {
-        const meetingDateObj = sub.zoom_meeting_time ? new Date(sub.zoom_meeting_time) : null;
-        const meetingTimeStr = meetingDateObj ? meetingDateObj.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' }) : 'Belum ditentukan';
-        const isScheduleConfirmed = sub.schedule_status === 'confirmed';
+      if (isTutorOrAdmin) {
+        // --- PANEL PERIKSA & KONFIRMASI JADWAL ZOOM UNTUK TUTOR ---
+        const unitSubs = (AppState.submissions || []).filter(s => s.content_id === currentUnit.id || (s.course_id === course.id && (s.type === 'zoom' || s.zoom_url)));
 
-        const waConfirmUrl = buildWhatsAppZoomConfirmation(tutor, AppState.user || { name: 'Peserta' }, course, currentUnit, meetingTimeStr, sub.zoom_url, false);
-        const waArrivedUrl = buildWhatsAppZoomConfirmation(tutor, AppState.user || { name: 'Peserta' }, course, currentUnit, meetingTimeStr, sub.zoom_url, true);
-
-        zoomStatusHtml = `
-          <div class="submission-status-card ${isApproved ? 'approved' : (isRejected ? 'rejected' : 'pending')}">
-            <div class="submission-status-header">
-              <div class="submission-status-title">
-                <span>📹</span> ${isApproved ? 'Sesi Zoom Selesai & Disetujui' : (isScheduleConfirmed ? 'Jadwal Zoom Dikonfirmasi Tutor 🤝' : 'Pengajuan Jadwal Zoom')}
-              </div>
-              <span class="badge ${isApproved ? 'badge-success' : (isScheduleConfirmed ? 'badge-primary' : 'badge-warning')}">
-                ${isApproved ? '✅ Lulus Tema' : (isScheduleConfirmed ? 'Jadwal Disetujui' : 'Menunggu Konfirmasi')}
-              </span>
+        let tutorListHtml = '';
+        if (unitSubs.length === 0) {
+          tutorListHtml = `
+            <div style="text-align:center;padding:2.5rem 1.5rem;background:#fff;border-radius:10px;border:1px dashed #cbd5e1;margin-bottom:1.5rem;">
+              <div style="font-size:2.5rem;margin-bottom:0.5rem;">📹</div>
+              <h4 style="margin:0 0 0.25rem;color:var(--primary);">Belum Ada Usulan Jadwal Tatap Muka Zoom</h4>
+              <p style="font-size:0.875rem;color:var(--tertiary);margin:0 0 1rem;max-width:480px;margin-left:auto;margin-right:auto;">
+                Begitu siswa mengajukan usulan tanggal, jam, dan ruang Zoom mereka, permohonan temu virtual akan muncul di sini.
+              </p>
+              <button type="button" class="btn btn-outline btn-sm" onclick="refreshApprovalsFromPlayer('${currentUnit.id}', '${course.id}')">
+                🔄 Muat Ulang Data dari Server
+              </button>
             </div>
+          `;
+        } else {
+          tutorListHtml = unitSubs.map(s => {
+            const student = AppState.students.find(st => st.id === s.student_id);
+            const isApproved = s.approval_status === 'approved';
+            const isConfirmed = s.schedule_status === 'confirmed';
+            const meetingDateObj = s.zoom_meeting_time ? new Date(s.zoom_meeting_time) : null;
+            const meetingTimeStr = meetingDateObj ? meetingDateObj.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' }) : 'Belum ditentukan';
 
-            <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:1rem;margin-top:0.5rem;">
-              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
-                <div>
-                  <span style="font-size:0.75rem;color:var(--tertiary);display:block;">Waktu Pertemuan Tatap Muka:</span>
-                  <strong style="font-size:1rem;color:var(--primary);">${meetingTimeStr} WIB</strong>
+            return `
+              <div style="background:#ffffff;border:1px solid ${isApproved ? '#86efac' : '#e2e8f0'};border-radius:10px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-1);">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+                  <div>
+                    <strong style="font-size:1.05rem;color:var(--primary);">${escHtml(s.student_name || 'Peserta')}</strong>
+                    <div style="font-size:0.75rem;color:var(--tertiary);">${escHtml(student?.class || s.student_email || 'Siswa')}</div>
+                  </div>
+                  <div>
+                    <span class="badge ${isApproved ? 'badge-success' : (isConfirmed ? 'badge-primary' : 'badge-warning')}">
+                      ${isApproved ? '✅ Lulus Tema' : (isConfirmed ? '🤝 Jadwal Disetujui' : '⏳ Menunggu Konfirmasi')}
+                    </span>
+                  </div>
                 </div>
-                <a href="${escHtml(sub.zoom_url)}" target="_blank" rel="noopener noreferrer" class="btn-zoom-join">
-                  🚀 Masuk Ruang Zoom ↗
-                </a>
-              </div>
-              <div style="font-size:0.8125rem;color:var(--tertiary);word-break:break-all;">
-                Link Room: <a href="${escHtml(sub.zoom_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);font-weight:600;">${escHtml(sub.zoom_url)}</a>
-              </div>
-            </div>
 
-            ${isApproved ? `
-              <div class="submission-feedback-box" style="margin-top:0.5rem;">
-                <strong>Nilai & Ulasan Tutor (${escHtml(tutor.name)}):</strong><br>
-                ${escHtml(sub.tutor_feedback || 'Sesi tatap muka virtual berjalan sangat baik. Pemahaman Anda telah teruji dengan lancar.')}
-                <div style="margin-top:0.75rem;">
-                  <button class="btn btn-primary" onclick="nextPlayerUnit()">
-                    Lanjut ke Tema Berikutnya →
+                <div style="background:#eff6ff;padding:0.75rem 1rem;border-radius:8px;margin-bottom:0.75rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+                  <div>
+                    <div style="font-size:0.75rem;color:#1e40af;font-weight:600;">Jadwal Pertemuan Tatap Muka:</div>
+                    <strong style="font-size:1rem;color:#1e3a8a;">${meetingTimeStr} WIB</strong>
+                  </div>
+                  <a href="${escHtml(s.zoom_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+                    🚀 Masuk Ruang Zoom Siswa ↗
+                  </a>
+                </div>
+
+                ${s.student_notes ? `<div style="font-size:0.8125rem;color:#475569;margin-bottom:0.75rem;"><strong>Catatan Topik:</strong> "${escHtml(s.student_notes)}"</div>` : ''}
+
+                <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid #f1f5f9;">
+                  <button type="button" class="btn btn-outline btn-sm" onclick="openModalConfirmZoomSchedule('${s.id}')">
+                    📅 Atur / Konfirmasi Jadwal
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm" onclick="openModalReviewSubmission('${s.id}')" style="font-weight:700;">
+                    ⚡ ${isApproved ? 'Ubah Penilaian' : 'Evaluasi & Beri Kelulusan Sesi'}
                   </button>
                 </div>
               </div>
-            ` : `
-              <!-- Tombol Notifikasi WhatsApp ke Tutor -->
-              <div style="margin-top:0.75rem;padding:1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
-                <div style="font-weight:700;color:#166534;font-size:0.875rem;margin-bottom:0.35rem;">
-                  💬 Koordinasi Langsung via WhatsApp Tutor Pengampu
-                </div>
-                <p style="font-size:0.8125rem;color:#15803d;margin-bottom:0.75rem;line-height:1.5;">
-                  Gunakan tombol di bawah ini untuk mengirim pesan konfirmasi otomatis ke WhatsApp <strong>${escHtml(tutor.name)}</strong>:
+            `;
+          }).join('');
+        }
+
+        contentHtml = `
+          <div style="max-width:780px;margin:0 auto;line-height:1.7;">
+            <div style="background:linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);color:#fff;border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;box-shadow:var(--shadow-2);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+              <div>
+                <span class="badge" style="background:#4338ca;color:#e0e7ff;font-weight:700;margin-bottom:0.35rem;display:inline-block;">👨‍🏫 Panel Tutor</span>
+                <h3 style="margin:0;font-size:1.2rem;color:#fff;">Sesi Zoom: ${escHtml(currentUnit.title)}</h3>
+                <p style="margin:0.25rem 0 0;font-size:0.8125rem;color:#c7d2fe;">
+                  Kelola jadwal tatap muka virtual dan berikan penilaian evaluasi sesi setelah temu selesai.
                 </p>
-                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                  <a href="${waConfirmUrl}" target="_blank" rel="noopener noreferrer" class="btn-whatsapp">
-                    <svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.698c.969.584 1.761.813 2.796.814 3.183 0 5.769-2.587 5.769-5.767 0-3.181-2.586-5.768-5.769-5.768zm7.969 5.766c0 4.398-3.572 7.969-7.969 7.969-1.393 0-2.696-.36-3.83-1l-4.181 1.095 1.115-4.083c-.724-1.189-1.104-2.56-1.104-3.981 0-4.398 3.572-7.969 7.969-7.969 4.397 0 7.969 3.571 7.969 7.969z"/></svg>
-                    Konfirmasi Jadwal via WhatsApp
+              </div>
+              <button type="button" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);" onclick="refreshApprovalsFromPlayer('${currentUnit.id}', '${course.id}')">
+                🔄 Muat Ulang
+              </button>
+            </div>
+
+            ${tutorListHtml}
+          </div>
+        `;
+      } else {
+        // --- TAMPILAN SISWA ZOOM ---
+        const studentId = AppState.user?.id;
+        const sub = (AppState.submissions || []).find(s => s.student_id === studentId && s.content_id === currentUnit.id);
+        const isApproved = sub && sub.approval_status === 'approved';
+        const isRejected = sub && sub.approval_status === 'rejected';
+        const isPending = sub && sub.approval_status === 'pending';
+
+        let zoomStatusHtml = '';
+        if (sub) {
+          const meetingDateObj = sub.zoom_meeting_time ? new Date(sub.zoom_meeting_time) : null;
+          const meetingTimeStr = meetingDateObj ? meetingDateObj.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' }) : 'Belum ditentukan';
+          const isScheduleConfirmed = sub.schedule_status === 'confirmed';
+
+          const waConfirmUrl = buildWhatsAppZoomConfirmation(tutor, AppState.user || { name: 'Peserta' }, course, currentUnit, meetingTimeStr, sub.zoom_url, false);
+          const waArrivedUrl = buildWhatsAppZoomConfirmation(tutor, AppState.user || { name: 'Peserta' }, course, currentUnit, meetingTimeStr, sub.zoom_url, true);
+
+          zoomStatusHtml = `
+            <div class="submission-status-card ${isApproved ? 'approved' : (isRejected ? 'rejected' : 'pending')}">
+              <div class="submission-status-header">
+                <div class="submission-status-title">
+                  <span>📹</span> ${isApproved ? 'Sesi Zoom Selesai & Disetujui' : (isScheduleConfirmed ? 'Jadwal Zoom Dikonfirmasi Tutor 🤝' : 'Pengajuan Jadwal Zoom')}
+                </div>
+                <span class="badge ${isApproved ? 'badge-success' : (isScheduleConfirmed ? 'badge-primary' : 'badge-warning')}">
+                  ${isApproved ? '✅ Lulus Tema' : (isScheduleConfirmed ? 'Jadwal Disetujui' : 'Menunggu Konfirmasi')}
+                </span>
+              </div>
+
+              <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:1rem;margin-top:0.5rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
+                  <div>
+                    <span style="font-size:0.75rem;color:var(--tertiary);display:block;">Waktu Pertemuan Tatap Muka:</span>
+                    <strong style="font-size:1rem;color:var(--primary);">${meetingTimeStr} WIB</strong>
+                  </div>
+                  <a href="${escHtml(sub.zoom_url)}" target="_blank" rel="noopener noreferrer" class="btn-zoom-join">
+                    🚀 Masuk Ruang Zoom ↗
                   </a>
-                  <a href="${waArrivedUrl}" target="_blank" rel="noopener noreferrer" class="btn-whatsapp" style="background:#0f766e;">
-                    <svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.698c.969.584 1.761.813 2.796.814 3.183 0 5.769-2.587 5.769-5.767 0-3.181-2.586-5.768-5.769-5.768zm7.969 5.766c0 4.398-3.572 7.969-7.969 7.969-1.393 0-2.696-.36-3.83-1l-4.181 1.095 1.115-4.083c-.724-1.189-1.104-2.56-1.104-3.981 0-4.398 3.572-7.969 7.969-7.969 4.397 0 7.969 3.571 7.969 7.969z"/></svg>
-                    ⏰ Sudah Waktunya Zoom! Beritahu Tutor
-                  </a>
+                </div>
+                <div style="font-size:0.8125rem;color:var(--tertiary);word-break:break-all;">
+                  Link Room: <a href="${escHtml(sub.zoom_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);font-weight:600;">${escHtml(sub.zoom_url)}</a>
                 </div>
               </div>
-            `}
+
+              ${isApproved ? `
+                <div class="submission-feedback-box" style="margin-top:0.5rem;">
+                  <strong>Nilai & Ulasan Tutor (${escHtml(tutor.name)}):</strong><br>
+                  ${escHtml(sub.tutor_feedback || 'Sesi tatap muka virtual berjalan sangat baik. Pemahaman Anda telah teruji dengan lancar.')}
+                  <div style="margin-top:0.75rem;">
+                    <button class="btn btn-primary" onclick="nextPlayerUnit()">
+                      Lanjut ke Tema Berikutnya →
+                    </button>
+                  </div>
+                </div>
+              ` : `
+                <!-- Tombol Notifikasi WhatsApp ke Tutor -->
+                <div style="margin-top:0.75rem;padding:1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
+                  <div style="font-weight:700;color:#166534;font-size:0.875rem;margin-bottom:0.35rem;">
+                    💬 Koordinasi Langsung via WhatsApp Tutor Pengampu
+                  </div>
+                  <p style="font-size:0.8125rem;color:#15803d;margin-bottom:0.75rem;line-height:1.5;">
+                    Gunakan tombol di bawah ini untuk mengirim pesan konfirmasi otomatis ke WhatsApp <strong>${escHtml(tutor.name)}</strong>:
+                  </p>
+                  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    <a href="${waConfirmUrl}" target="_blank" rel="noopener noreferrer" class="btn-whatsapp">
+                      <svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.698c.969.584 1.761.813 2.796.814 3.183 0 5.769-2.587 5.769-5.767 0-3.181-2.586-5.768-5.769-5.768zm7.969 5.766c0 4.398-3.572 7.969-7.969 7.969-1.393 0-2.696-.36-3.83-1l-4.181 1.095 1.115-4.083c-.724-1.189-1.104-2.56-1.104-3.981 0-4.398 3.572-7.969 7.969-7.969 4.397 0 7.969 3.571 7.969 7.969z"/></svg>
+                      Konfirmasi Jadwal via WhatsApp
+                    </a>
+                    <a href="${waArrivedUrl}" target="_blank" rel="noopener noreferrer" class="btn-whatsapp" style="background:#0f766e;">
+                      <svg viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.698c.969.584 1.761.813 2.796.814 3.183 0 5.769-2.587 5.769-5.767 0-3.181-2.586-5.768-5.769-5.768zm7.969 5.766c0 4.398-3.572 7.969-7.969 7.969-1.393 0-2.696-.36-3.83-1l-4.181 1.095 1.115-4.083c-.724-1.189-1.104-2.56-1.104-3.981 0-4.398 3.572-7.969 7.969-7.969 4.397 0 7.969 3.571 7.969 7.969z"/></svg>
+                      ⏰ Sudah Waktunya Zoom! Beritahu Tutor
+                    </a>
+                  </div>
+                </div>
+              `}
+            </div>
+          `;
+        }
+
+        const showZoomForm = !sub || isRejected;
+        const defaultTomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+        contentHtml = `
+          <div style="max-width:760px;margin:0 auto;line-height:1.7;">
+            <!-- Widget Kontak WhatsApp Tutor -->
+            ${renderTutorContactCard(tutor, course, currentUnit, '💬 Kontak WhatsApp Tutor')}
+
+            <div class="assignment-card">
+              <div class="assignment-card-header">
+                <h3 class="assignment-card-title">
+                  <span>📹</span> ${escHtml(currentUnit.title)}
+                </h3>
+                <span class="badge badge-primary">Sesi Tatap Muka Virtual</span>
+              </div>
+              <div class="assignment-card-body">
+                <div class="assignment-instruction-box">
+                  ${currentUnit.contentBody || '<p>Sediakan tautan ruang Zoom Meeting Anda dan usulkan waktu pertemuan tatap muka langsung bersama tutor pengampu.</p>'}
+                </div>
+
+                ${zoomStatusHtml}
+
+                <div id="zoom-form-container" style="display:${showZoomForm ? 'block' : 'none'};">
+                  <form id="form-submit-zoom" onsubmit="handleStudentSubmitZoom(event, '${course.id}', '${currentUnit.id}', '${currentUnit.moduleId || ''}')">
+                    <div class="form-group">
+                      <label class="form-label" style="font-weight:700;">
+                        Tautan Ruang Zoom Meeting (Disediakan oleh Peserta) <span style="color:var(--error);">*</span>
+                      </label>
+                      <input type="url" id="input-zoom-url" class="form-control" placeholder="https://us04web.zoom.us/j/... atau https://meet.google.com/..." value="${escHtml(sub?.zoom_url || '')}" required>
+                      <small style="color:var(--tertiary);font-size:0.75rem;display:block;margin-top:0.35rem;">
+                        💡 Buat ruang pertemuan Zoom gratis (atau Google Meet), lalu salin dan tempelkan link undangannya di sini.
+                      </small>
+                    </div>
+
+                    <div class="zoom-datetime-grid">
+                      <div class="form-group">
+                        <label class="form-label" style="font-weight:700;">Usulan Tanggal Pertemuan <span style="color:var(--error);">*</span></label>
+                        <input type="date" id="input-zoom-date" class="form-control" value="${defaultTomorrow}" required>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" style="font-weight:700;">Usulan Jam (WIB) <span style="color:var(--error);">*</span></label>
+                        <input type="time" id="input-zoom-time" class="form-control" value="14:00" required>
+                      </div>
+                    </div>
+
+                    <div class="form-group">
+                      <label class="form-label">Catatan Topik Diskusi / Ketersediaan Waktu (Opsional)</label>
+                      <textarea id="input-zoom-notes" class="form-control" rows="2" placeholder="Tuliskan topik bahasan materi yang ingin dikonsultasikan...">${escHtml(sub?.student_notes || '')}</textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="padding:0.75rem 2rem;font-size:0.95rem;width:100%;">
+                      📅 Ajukan Jadwal & Kirim Link Zoom
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
           </div>
         `;
       }
-
-      const showZoomForm = !sub || isRejected;
-      const defaultTomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-
-      contentHtml = `
-        <div style="max-width:760px;margin:0 auto;line-height:1.7;">
-          <!-- Widget Kontak WhatsApp Tutor -->
-          ${renderTutorContactCard(tutor, course, currentUnit, '💬 Kontak WhatsApp Tutor')}
-
-          <div class="assignment-card">
-            <div class="assignment-card-header">
-              <h3 class="assignment-card-title">
-                <span>📹</span> ${escHtml(currentUnit.title)}
-              </h3>
-              <span class="badge badge-primary">Sesi Tatap Muka Virtual</span>
-            </div>
-            <div class="assignment-card-body">
-              <div class="assignment-instruction-box">
-                ${currentUnit.contentBody || '<p>Sediakan tautan ruang Zoom Meeting Anda dan usulkan waktu pertemuan tatap muka langsung bersama tutor pengampu.</p>'}
-              </div>
-
-              ${zoomStatusHtml}
-
-              <div id="zoom-form-container" style="display:${showZoomForm ? 'block' : 'none'};">
-                <form id="form-submit-zoom" onsubmit="handleStudentSubmitZoom(event, '${course.id}', '${currentUnit.id}', '${currentUnit.moduleId || ''}')">
-                  <div class="form-group">
-                    <label class="form-label" style="font-weight:700;">
-                      Tautan Ruang Zoom Meeting (Disediakan oleh Peserta) <span style="color:var(--error);">*</span>
-                    </label>
-                    <input type="url" id="input-zoom-url" class="form-control" placeholder="https://us04web.zoom.us/j/... atau https://meet.google.com/..." value="${escHtml(sub?.zoom_url || '')}" required>
-                    <small style="color:var(--tertiary);font-size:0.75rem;display:block;margin-top:0.35rem;">
-                      💡 Buat ruang pertemuan Zoom gratis (atau Google Meet), lalu salin dan tempelkan link undangannya di sini.
-                    </small>
-                  </div>
-
-                  <div class="zoom-datetime-grid">
-                    <div class="form-group">
-                      <label class="form-label" style="font-weight:700;">Usulan Tanggal Pertemuan <span style="color:var(--error);">*</span></label>
-                      <input type="date" id="input-zoom-date" class="form-control" value="${defaultTomorrow}" required>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label" style="font-weight:700;">Usulan Jam (WIB) <span style="color:var(--error);">*</span></label>
-                      <input type="time" id="input-zoom-time" class="form-control" value="14:00" required>
-                    </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label">Catatan Topik Diskusi / Ketersediaan Waktu (Opsional)</label>
-                    <textarea id="input-zoom-notes" class="form-control" rows="2" placeholder="Tuliskan topik bahasan materi yang ingin dikonsultasikan...">${escHtml(sub?.student_notes || '')}</textarea>
-                  </div>
-
-                  <button type="submit" class="btn btn-primary" style="padding:0.75rem 2rem;font-size:0.95rem;width:100%;">
-                    📅 Ajukan Jadwal & Kirim Link Zoom
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
     } else if (typeLower === 'refleksi') {
       // REFLECTIVE JOURNAL
       contentHtml = `
@@ -2883,8 +3193,14 @@
         if (isDirectVideo && !isYoutube) {
           contentHtml = `
             <div class="video-player-container">
-              <div class="video-lock-badge">🔒 Kecepatan Terkunci (1.0x Normal • Anti-Skip)</div>
-              <video id="lms-custom-video" controls controlsList="nodownload noplaybackrate" disablePictureInPicture src="${currentUnit.embedUrl}">
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;background:#f8fafc;border:1px solid #cbd5e1;padding:0.5rem 0.85rem;border-radius:8px;">
+                <span class="video-lock-badge" style="margin-bottom:0;">🔒 Kecepatan 1.0x Normal • Proteksi Anti-Skip</span>
+                <button type="button" class="btn btn-outline btn-sm" onclick="resetVideoAntiSkipTest('${currentUnit.id}')" style="background:#ffffff;font-size:0.75rem;padding:0.25rem 0.65rem;font-weight:600;" title="Mulai ulang dari detik 00:00 untuk menguji penolakan lompatan scrubber">
+                  🔄 Uji Ulang Penguncian (Reset ke 00:00)
+                </button>
+              </div>
+              <video id="lms-custom-video" src="${escHtml(currentUnit.embedUrl)}" controls controlsList="nodownload noplaybackrate" disablePictureInPicture playsinline preload="auto" style="width:100%;border-radius:12px;background:#000;display:block;">
+                <source src="${escHtml(currentUnit.embedUrl)}" type="video/mp4">
                 Browser Anda tidak mendukung tag video HTML5.
               </video>
             </div>
@@ -2927,13 +3243,13 @@
     const remS = initialRem % 60;
     const initialPct = Math.min(100, Math.round(((savedElapsed || 0) / targetSeconds) * 100));
 
-    if (isStudent && !isCompleted && !isQuizUnit) {
+    if ((isStudent || forceTest) && (!isCompleted || forceTest) && !isQuizUnit) {
       if (isVideoUnit) {
         timerWidgetHtml = `
           <div class="study-timer-badge video-timer" id="study-timer-display" title="Tonton video pembelajaran ini hingga tuntas">
             <span>🎥</span>
             <div class="study-timer-bar"><div class="study-timer-fill" id="study-timer-progress" style="width:0%;"></div></div>
-            <span id="study-timer-text">Memuat video...</span>
+            <span id="study-timer-text">0:00 / 0:00 (0%)</span>
           </div>
         `;
       } else {
@@ -2945,7 +3261,7 @@
           </div>
         `;
       }
-    } else if (isCompleted && !isQuizUnit) {
+    } else if (isCompleted && !forceTest && !isQuizUnit) {
       timerWidgetHtml = `
         <div class="study-timer-badge completed">
           <span>✓</span>
@@ -2959,7 +3275,7 @@
     let nextBtnClass = 'btn-next-action';
     let nextBtnHtml = '<span>Selanjutnya →</span>';
 
-    if (isStudent && !currentUnit.completed) {
+    if (isStudent && !isCompleted) {
       nextBtnDisabled = true;
       nextBtnClass = 'btn-next-action locked';
 
@@ -2983,7 +3299,7 @@
         const durLabel = `${remM}:${remS < 10 ? '0' : ''}${remS}`;
         nextBtnHtml = `<span>🔒 Membaca Materi (Sisa <strong id="next-btn-countdown">${durLabel}</strong>)</span>`;
       }
-    } else if (currentUnit.completed) {
+    } else if (isCompleted) {
       nextBtnClass = 'btn-next-action ready';
       nextBtnHtml = '<span>✅ Selesai — Lanjutkan →</span>';
     }
@@ -3604,9 +3920,12 @@
   function initUnitInteractions(currentUnit, course, targetSeconds, isVideoUnit) {
     clearActiveStudyTimer();
 
-    const isStudent = AppState.currentRole === 'student' || AppState.isSimulatingStudent;
-    // Jika bukan siswa atau unit sudah selesai, tidak perlu menghitung / mengunci
-    if (!isStudent || currentUnit.completed) return;
+    const forceTest = (AppState.forceTestAntiSkip && AppState.forceTestAntiSkip[currentUnit.id]) || false;
+    const isStudent = AppState.currentRole === 'student' || AppState.isSimulatingStudent || forceTest;
+    
+    // Jika bukan siswa dan tidak dalam mode uji coba/simulasi, atau jika sudah selesai tanpa mode uji coba:
+    if (!isStudent) return;
+    if (currentUnit.completed && !AppState.isSimulatingStudent && !forceTest) return;
 
     const videoEl = document.getElementById('lms-custom-video');
     const ytIframe = document.getElementById('lms-youtube-iframe');
@@ -3617,16 +3936,19 @@
 
     // 1. Penguncian Video HTML5 (MP4 / WebM / Supabase Video)
     if (videoEl) {
-      const savedTime = parseFloat(AppState.unitVideoElapsed[currentUnit.id] || localStorage.getItem('lms_video_elapsed_' + currentUnit.id) || '0');
-      let maxWatchedTime = isNaN(savedTime) ? 0 : savedTime;
+      let maxWatchedTime = 0;
+      if (!forceTest) {
+        const savedTime = parseFloat(AppState.unitVideoElapsed[currentUnit.id] || localStorage.getItem('lms_video_elapsed_' + currentUnit.id) || '0');
+        maxWatchedTime = isNaN(savedTime) ? 0 : savedTime;
+      }
 
       // Posisikan ke detik terakhir yang pernah ditonton setelah metadata video siap
       videoEl.addEventListener('loadedmetadata', () => {
-        if (maxWatchedTime > 1 && videoEl.currentTime < maxWatchedTime) {
+        if (!forceTest && maxWatchedTime > 1 && videoEl.currentTime < maxWatchedTime) {
           try { videoEl.currentTime = maxWatchedTime; } catch (e) {}
         }
       });
-      if (maxWatchedTime > 1 && videoEl.currentTime < maxWatchedTime) {
+      if (!forceTest && maxWatchedTime > 1 && videoEl.currentTime < maxWatchedTime) {
         try { videoEl.currentTime = maxWatchedTime; } catch (e) {}
       }
 
@@ -3641,8 +3963,9 @@
 
       // Pause otomatis saat pengguna membuka tab baru / meninggalkan LMS
       activeVisChangeHandler = () => {
-        if (document.hidden && !videoEl.paused) {
+        if ((document.hidden || !document.hasFocus()) && !videoEl.paused) {
           videoEl.pause();
+          showToast('⏸️ Video otomatis dijeda karena Anda berpindah tab / meninggalkan LMS.', 'warning');
           if (timerBadge && !timerBadge.classList.contains('paused')) {
             timerBadge.classList.add('paused');
             if (timerText) timerText.textContent = '⏸️ Video Dijeda (Tab Tidak Aktif)';
@@ -3650,6 +3973,7 @@
         }
       };
       document.addEventListener('visibilitychange', activeVisChangeHandler);
+      window.addEventListener('blur', activeVisChangeHandler);
 
       videoEl.addEventListener('play', () => {
         if (timerBadge && timerBadge.classList.contains('paused')) {
@@ -3659,17 +3983,17 @@
 
       // ANTI-SKIP SEGERA SAAT USER MENCOBA GESER SCRUBBER
       videoEl.addEventListener('seeking', () => {
-        if (videoEl.currentTime > maxWatchedTime + 1.5) {
+        if (videoEl.currentTime > maxWatchedTime + 0.8) {
           videoEl.currentTime = maxWatchedTime;
-          showToast('🔒 Anda tidak dapat melompati bagian video yang belum ditonton.', 'warning');
+          showToast('🔒 Anti-Skip Aktif: Anda tidak dapat melompati video yang belum ditonton.', 'warning');
         }
       });
 
       videoEl.addEventListener('timeupdate', () => {
         // ANTI-SKIP: Jika melompati ke waktu yang belum pernah ditonton
-        if (videoEl.currentTime > maxWatchedTime + 2.5) {
+        if (videoEl.currentTime > maxWatchedTime + 1.2) {
           videoEl.currentTime = maxWatchedTime;
-          showToast('🔒 Anda tidak dapat melompati bagian video yang belum ditonton.', 'warning');
+          showToast('🔒 Anti-Skip Aktif: Anda tidak dapat melompati video yang belum ditonton.', 'warning');
         } else if (videoEl.currentTime > maxWatchedTime) {
           maxWatchedTime = videoEl.currentTime;
           AppState.unitVideoElapsed[currentUnit.id] = maxWatchedTime;
@@ -3698,8 +4022,15 @@
       videoEl.addEventListener('ended', () => {
         clearActiveStudyTimer();
         showToast('🎉 Selamat! Anda telah menyelesaikan sesi video pembelajaran ini.', 'success');
+        if (AppState.forceTestAntiSkip) {
+          AppState.forceTestAntiSkip[currentUnit.id] = false;
+        }
         markUnitComplete(currentUnit.id, course.id);
       });
+
+      try {
+        if (!videoEl.currentSrc) videoEl.load();
+      } catch (e) {}
 
       return;
     }
@@ -3901,6 +4232,30 @@
       }
     }, 1000);
   }
+
+  window.resetVideoAntiSkipTest = function(unitId) {
+    if (!AppState.forceTestAntiSkip) AppState.forceTestAntiSkip = {};
+    AppState.forceTestAntiSkip[unitId] = true;
+    AppState.unitVideoElapsed[unitId] = 0;
+    try {
+      localStorage.removeItem('lms_video_elapsed_' + unitId);
+    } catch (e) {}
+
+    const videoEl = document.getElementById('lms-custom-video');
+    if (videoEl) {
+      try {
+        videoEl.pause();
+        videoEl.currentTime = 0;
+      } catch (e) {}
+    }
+
+    showToast('🔒 Penguncian anti-skip diuji ulang: Video di-reset ke 00:00 dan scrubber dikunci.', 'info');
+    if (AppState.activeCoursePlayer) {
+      renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
+    }
+  };
+
+  window.toggleStudentSimulation = toggleStudentSimulation;
 
   async function markUnitComplete(contentId, courseId) {
     clearActiveStudyTimer();
@@ -5488,6 +5843,15 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
    * ========================================================= */
   function renderTutorApprovals(container) {
     if (!container) return;
+    const sb = typeof getSupabase === 'function' ? getSupabase() : null;
+    if (sb && (!AppState.submissions || AppState.submissions.length === 0)) {
+      loadAssignmentSubmissions(sb).then(() => {
+        if (AppState.currentView === 'tutor-approvals') {
+          renderTutorApprovals(container);
+        }
+      });
+    }
+
     const subs = AppState.submissions || [];
     const activeTab = AppState.activeApprovalTab || 'all';
 
@@ -5520,7 +5884,15 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
         <td colspan="7" style="text-align:center;padding:3rem 1rem;color:var(--tertiary);">
           <div style="font-size:2.5rem;margin-bottom:0.5rem;">📂</div>
           <strong style="font-size:1rem;color:var(--primary);display:block;">Tidak ada data pengajuan pada filter ini</strong>
-          <p style="font-size:0.875rem;margin:0.25rem 0 0;">Pengajuan tugas Google Drive dan usulan jadwal Zoom peserta akan tampil di sini.</p>
+          <p style="font-size:0.875rem;margin:0.25rem 0 1rem;">Pengajuan tugas Google Drive dan usulan jadwal Zoom peserta akan tampil di sini.</p>
+          <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="demoTestApprovalModal(null, null)">
+              ⚡ Uji Coba Form Persetujuan (Simulasi Tugas Siswa)
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="refreshApprovalsView()">
+              🔄 Sinkronkan Data dari Server
+            </button>
+          </div>
         </td>
       </tr>
     ` : filteredSubs.map(s => {
@@ -6052,10 +6424,13 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     const modal = document.getElementById('global-modal');
     if (modal) {
       modal.classList.remove('active');
+      modal.style.display = 'none';
       const box = modal.querySelector('.modal-box');
       if (box) box.classList.remove('modal-lg');
     }
   }
+
+  window.closeModal = closeModal;
 
   function setModalLoading(loading, defaultText) {
     const btn = document.getElementById('modal-action-btn');
