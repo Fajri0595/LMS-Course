@@ -34,6 +34,8 @@
     activeQuizAnswers: {},    // { [questionId]: optionIdx }
     activeQuizStartTime: null,
     quizReviewMode: {},       // { [unitId]: boolean }
+    unitStudyElapsed: {},     // { [unitId]: seconds }
+    unitVideoElapsed: {},     // { [unitId]: seconds }
     isDemoMode: false
   };
 
@@ -819,19 +821,30 @@
         modules: ((c.modules || []).sort((a, b) => (a.order_index || 0) - (b.order_index || 0))),
         contents: (rawContents
           .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
-          .map(cnt => ({
-            id: cnt.id,
-            moduleId: cnt.module_id,
-            sectionName: cnt.section_name || '',
-            title: cnt.title,
-            type: cnt.type,
-            duration: cnt.duration || '5 Menit',
-            embedUrl: cnt.embed_url || '',
-            contentBody: cnt.content_body || '',
-            quizData: cnt.quiz_data || null,
-            passingScore: cnt.passing_score || 70,
-            completed: false // akan diisi loadStudentProgress
-          })))
+          .map(cnt => {
+            let itemType = cnt.type || 'materi';
+            const itemBody = cnt.content_body || '';
+            if (itemType === 'tugas') {
+              if (itemBody.includes('<!--TYPE:tugas_drive-->')) {
+                itemType = 'tugas_drive';
+              } else if (itemBody.includes('<!--TYPE:tugas_zoom-->')) {
+                itemType = 'tugas_zoom';
+              }
+            }
+            return {
+              id: cnt.id,
+              moduleId: cnt.module_id,
+              sectionName: cnt.section_name || '',
+              title: cnt.title,
+              type: itemType,
+              duration: cnt.duration || '5 Menit',
+              embedUrl: cnt.embed_url || '',
+              contentBody: itemBody,
+              quizData: cnt.quiz_data || null,
+              passingScore: cnt.passing_score || 70,
+              completed: false // akan diisi loadStudentProgress
+            };
+          }))
       };
     });
   }
@@ -1461,37 +1474,82 @@
   async function dbAddContent({ courseId, title, type, duration, embedUrl, contentBody, sectionName, orderIndex, quizData, passingScore }) {
     const sb = getSupabase();
     if (!sb) throw new Error('Supabase tidak tersedia');
-    const { data, error } = await sb.from('course_contents').insert([{
+
+    let bodyToSave = contentBody || '';
+    let payloadType = type;
+
+    // Coba insert pertama kali
+    let res = await sb.from('course_contents').insert([{
       course_id: courseId,
       title,
-      type,
+      type: payloadType,
       duration: duration || '10 Menit',
       embed_url: embedUrl || null,
-      content_body: contentBody || '',
+      content_body: bodyToSave,
       section_name: sectionName || '',
       order_index: orderIndex || 1,
       quiz_data: quizData || null,
       passing_score: passingScore || 70
     }]).select().single();
-    if (error) throw error;
-    return data;
+
+    // Fallback otomatis jika skema database belum diperbarui constraint-nya untuk 'tugas_drive' / 'tugas_zoom'
+    if (res.error && (res.error.code === '23514' || res.error.message?.includes('course_contents_type_check'))) {
+      console.warn('DB constraint type_check terpicu untuk type:', type, 'Melakukan fallback ke type "tugas" dengan metadata tag...');
+      if (type === 'tugas_drive' || type === 'tugas_zoom') {
+        payloadType = 'tugas';
+        if (!bodyToSave.includes(`<!--TYPE:${type}-->`)) {
+          bodyToSave = `<!--TYPE:${type}-->\n` + bodyToSave;
+        }
+        res = await sb.from('course_contents').insert([{
+          course_id: courseId,
+          title,
+          type: payloadType,
+          duration: duration || '10 Menit',
+          embed_url: embedUrl || null,
+          content_body: bodyToSave,
+          section_name: sectionName || '',
+          order_index: orderIndex || 1,
+          quiz_data: quizData || null,
+          passing_score: passingScore || 70
+        }]).select().single();
+      }
+    }
+
+    if (res.error) throw res.error;
+    return { ...res.data, type: type, content_body: bodyToSave };
   }
 
   async function dbEditContent(contentId, { title, type, duration, embedUrl, contentBody, sectionName, quizData, passingScore }) {
     const sb = getSupabase();
     if (!sb) throw new Error('Supabase tidak tersedia');
+
+    let bodyToSave = contentBody || '';
+    let payloadType = type;
+
     const updatePayload = {
       title,
-      type,
+      type: payloadType,
       duration: duration || '10 Menit',
       embed_url: embedUrl || null,
-      content_body: contentBody || ''
+      content_body: bodyToSave
     };
     if (sectionName !== undefined) updatePayload.section_name = sectionName;
     if (quizData !== undefined) updatePayload.quiz_data = quizData;
     if (passingScore !== undefined) updatePayload.passing_score = passingScore;
-    const { error } = await sb.from('course_contents').update(updatePayload).eq('id', contentId);
-    if (error) throw error;
+
+    let res = await sb.from('course_contents').update(updatePayload).eq('id', contentId);
+    if (res.error && (res.error.code === '23514' || res.error.message?.includes('course_contents_type_check'))) {
+      console.warn('DB constraint type_check terpicu saat edit:', type, 'Melakukan fallback ke type "tugas"...');
+      if (type === 'tugas_drive' || type === 'tugas_zoom') {
+        updatePayload.type = 'tugas';
+        if (!bodyToSave.includes(`<!--TYPE:${type}-->`)) {
+          bodyToSave = `<!--TYPE:${type}-->\n` + bodyToSave;
+          updatePayload.content_body = bodyToSave;
+        }
+        res = await sb.from('course_contents').update(updatePayload).eq('id', contentId);
+      }
+    }
+    if (res.error) throw res.error;
   }
 
   async function dbDeleteContent(contentId) {
@@ -1561,6 +1619,9 @@
    * NAVIGATION & ROUTING
    * ========================================================= */
   function navigateTo(viewId, param = null) {
+    if (viewId !== 'course-player') {
+      clearActiveStudyTimer();
+    }
     AppState.currentView = viewId;
     try {
       localStorage.setItem('lms_last_active_route', JSON.stringify({
@@ -2278,7 +2339,7 @@
 
       return `
         <div class="player-chapter-card ${isExpanded ? 'expanded' : ''} ${hasActive ? 'chapter-active' : ''}">
-          <div class="player-chapter-header" onclick="toggleChapterAccordion('${escHtml(chTitle)}')">
+          <div class="player-chapter-header" onclick="toggleChapterAccordion('${escHtml(chTitle)}', event)">
             <div class="player-status-circle ${chStatusClass}" style="flex-shrink:0;">
               ${chStatusIcon}
             </div>
@@ -2779,14 +2840,15 @@
         } else if (isYoutube) {
           const ytMatch = currentUnit.embedUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
           const ytId = ytMatch ? ytMatch[1] : '';
-          const embedOrigin = encodeURIComponent(window.location.origin || 'http://localhost:3000');
+          const hasOrigin = window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file');
+          const originParam = hasOrigin ? `&origin=${encodeURIComponent(window.location.origin)}` : '';
           const embedSrc = ytId
-            ? `https://www.youtube-nocookie.com/embed/${ytId}?enablejsapi=1&origin=${embedOrigin}&rel=0&modestbranding=1`
-            : currentUnit.embedUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'www.youtube-nocookie.com/embed/');
+            ? `https://www.youtube.com/embed/${ytId}?enablejsapi=1${originParam}&rel=0&modestbranding=1`
+            : currentUnit.embedUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'www.youtube.com/embed/');
 
           contentHtml = `
             <div class="video-player-container" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin-bottom:1.5rem;background:#000;">
-              <div class="video-lock-badge">🔒 Tonton Video Hingga Selesai untuk Melanjutkan</div>
+              <div class="video-lock-badge">🔒 Tonton Video Hingga Selesai (Anti-Skip • 1.0x Normal)</div>
               <iframe id="lms-youtube-iframe" src="${embedSrc}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
             </div>
             ${currentUnit.contentBody ? `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody}</div>` : ''}
@@ -2802,6 +2864,16 @@
     const isVideoUnit = typeLower === 'video' || (currentUnit.embedUrl && (currentUnit.embedUrl.endsWith('.mp4') || currentUnit.embedUrl.includes('youtube') || currentUnit.embedUrl.includes('youtu.be') || currentUnit.embedUrl.includes('/storage/v1/object/public/')));
     const targetSeconds = parseDurationSeconds(currentUnit.duration, currentUnit.contentBody);
 
+    let savedElapsed = AppState.unitStudyElapsed[currentUnit.id];
+    if (savedElapsed === undefined || savedElapsed === null) {
+      const stored = localStorage.getItem('lms_study_elapsed_' + currentUnit.id);
+      savedElapsed = stored ? parseInt(stored, 10) : 0;
+    }
+    const initialRem = Math.max(0, targetSeconds - (savedElapsed || 0));
+    const remM = Math.floor(initialRem / 60);
+    const remS = initialRem % 60;
+    const initialPct = Math.min(100, Math.round(((savedElapsed || 0) / targetSeconds) * 100));
+
     if (isStudent && !isCompleted && !isQuizUnit) {
       if (isVideoUnit) {
         timerWidgetHtml = `
@@ -2812,12 +2884,10 @@
           </div>
         `;
       } else {
-        const remM = Math.floor(targetSeconds / 60);
-        const remS = targetSeconds % 60;
         timerWidgetHtml = `
           <div class="study-timer-badge text-timer" id="study-timer-display" title="Estimasi waktu membaca materi ini untuk membuka sesi berikutnya">
             <span>⏱️</span>
-            <div class="study-timer-bar"><div class="study-timer-fill" id="study-timer-progress" style="width:0%;"></div></div>
+            <div class="study-timer-bar"><div class="study-timer-fill" id="study-timer-progress" style="width:${initialPct}%;"></div></div>
             <span id="study-timer-text">${remM}:${remS < 10 ? '0' : ''}${remS} tersisa</span>
           </div>
         `;
@@ -2857,8 +2927,6 @@
       } else if (isVideoUnit) {
         nextBtnHtml = '<span>🔒 Tonton Video Hingga Selesai</span>';
       } else {
-        const remM = Math.floor(targetSeconds / 60);
-        const remS = targetSeconds % 60;
         const durLabel = `${remM}:${remS < 10 ? '0' : ''}${remS}`;
         nextBtnHtml = `<span>🔒 Membaca Materi (Sisa <strong id="next-btn-countdown">${durLabel}</strong>)</span>`;
       }
@@ -3129,9 +3197,32 @@
     renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
   }
 
-  function toggleChapterAccordion(chTitle) {
+  function toggleChapterAccordion(chTitle, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     AppState.expandedChapters[chTitle] = !AppState.expandedChapters[chTitle];
-    renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
+    const isExp = !!AppState.expandedChapters[chTitle];
+
+    // Toggle langsung di DOM tanpa re-render player agar video/timer tidak terganggu
+    const cards = document.querySelectorAll('.player-chapter-card');
+    let found = false;
+    cards.forEach(card => {
+      const titleEl = card.querySelector('.player-chapter-title');
+      if (titleEl && titleEl.textContent.trim() === (chTitle || '').trim()) {
+        card.classList.toggle('expanded', isExp);
+        const chev = card.querySelector('.player-chapter-chevron');
+        if (chev) {
+          chev.style.transform = isExp ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+        found = true;
+      }
+    });
+
+    if (!found && AppState.activeCoursePlayer) {
+      renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
+    }
   }
 
   function selectQuizOption(qId, optIdx) {
@@ -3438,11 +3529,16 @@
   // Pengatur Timer Belajar dan Penguncian Video
   let activeStudyInterval = null;
   let activeYtPlayer = null;
+  let activeVisChangeHandler = null;
 
   function clearActiveStudyTimer() {
     if (activeStudyInterval) {
       clearInterval(activeStudyInterval);
       activeStudyInterval = null;
+    }
+    if (activeVisChangeHandler) {
+      document.removeEventListener('visibilitychange', activeVisChangeHandler);
+      activeVisChangeHandler = null;
     }
     if (activeYtPlayer) {
       try {
@@ -3464,12 +3560,18 @@
     const timerText = document.getElementById('study-timer-text');
     const timerBar = document.getElementById('study-timer-progress');
     const timerBadge = document.getElementById('study-timer-display');
-    const nextBtn = document.getElementById('btn-player-next');
     const countdownSpan = document.getElementById('next-btn-countdown');
 
     // 1. Penguncian Video HTML5 (MP4 / WebM / Supabase Video)
     if (videoEl) {
-      let maxWatchedTime = 0;
+      const savedTime = parseFloat(AppState.unitVideoElapsed[currentUnit.id] || localStorage.getItem('lms_video_elapsed_' + currentUnit.id) || '0');
+      let maxWatchedTime = isNaN(savedTime) ? 0 : savedTime;
+
+      // Posisikan ke detik terakhir yang pernah ditonton
+      if (maxWatchedTime > 1 && videoEl.currentTime < maxWatchedTime) {
+        try { videoEl.currentTime = maxWatchedTime; } catch (e) {}
+      }
+
       videoEl.playbackRate = 1.0;
 
       videoEl.addEventListener('ratechange', () => {
@@ -3479,12 +3581,33 @@
         }
       });
 
+      // Pause otomatis saat pengguna membuka tab baru / meninggalkan LMS
+      activeVisChangeHandler = () => {
+        if (document.hidden && !videoEl.paused) {
+          videoEl.pause();
+          if (timerBadge && !timerBadge.classList.contains('paused')) {
+            timerBadge.classList.add('paused');
+            if (timerText) timerText.textContent = '⏸️ Video Dijeda (Tab Tidak Aktif)';
+          }
+        }
+      };
+      document.addEventListener('visibilitychange', activeVisChangeHandler);
+
+      videoEl.addEventListener('play', () => {
+        if (timerBadge && timerBadge.classList.contains('paused')) {
+          timerBadge.classList.remove('paused');
+        }
+      });
+
       videoEl.addEventListener('timeupdate', () => {
+        // ANTI-SKIP: Jika melompati ke waktu yang belum pernah ditonton
         if (videoEl.currentTime > maxWatchedTime + 2.5) {
           videoEl.currentTime = maxWatchedTime;
           showToast('🔒 Anda tidak dapat melompati bagian video yang belum ditonton.', 'warning');
-        } else {
-          maxWatchedTime = Math.max(maxWatchedTime, videoEl.currentTime);
+        } else if (videoEl.currentTime > maxWatchedTime) {
+          maxWatchedTime = videoEl.currentTime;
+          AppState.unitVideoElapsed[currentUnit.id] = maxWatchedTime;
+          localStorage.setItem('lms_video_elapsed_' + currentUnit.id, maxWatchedTime.toString());
         }
 
         if (videoEl.duration) {
@@ -3494,7 +3617,9 @@
           const durS = Math.floor(videoEl.duration % 60);
           const pct = Math.min(100, Math.round((videoEl.currentTime / videoEl.duration) * 100));
 
-          if (timerText) timerText.textContent = `${curM}:${curS < 10 ? '0' : ''}${curS} / ${durM}:${durS < 10 ? '0' : ''}${durS} (${pct}%)`;
+          if (timerText && !timerBadge?.classList.contains('paused')) {
+            timerText.textContent = `${curM}:${curS < 10 ? '0' : ''}${curS} / ${durM}:${durS < 10 ? '0' : ''}${durS} (${pct}%)`;
+          }
           if (timerBar) timerBar.style.width = `${pct}%`;
 
           // Otomatis selesai jika mendekati akhir durasi
@@ -3505,6 +3630,7 @@
       });
 
       videoEl.addEventListener('ended', () => {
+        clearActiveStudyTimer();
         showToast('🎉 Selamat! Anda telah menyelesaikan sesi video pembelajaran ini.', 'success');
         markUnitComplete(currentUnit.id, course.id);
       });
@@ -3512,16 +3638,31 @@
       return;
     }
 
-    // 2. Penguncian Video YouTube (Iframe Player API & Smart Watch Tracking)
+    // 2. Penguncian Video YouTube (Iframe Player API & Smart Anti-Skip Watch Tracking)
     if (ytIframe) {
-      let ytWatchedSeconds = 0;
       const ytTarget = Math.max(15, targetSeconds);
+      const savedYtTime = parseFloat(AppState.unitVideoElapsed[currentUnit.id] || localStorage.getItem('lms_video_elapsed_' + currentUnit.id) || '0');
+      let maxYtWatched = isNaN(savedYtTime) ? 0 : savedYtTime;
 
-      // Inisialisasi YouTube Iframe Player API jika tersedia
-      if (window.YT && window.YT.Player) {
+      // Inisialisasi YouTube Iframe Player API dengan kontrol anti-skip
+      const initYTPlayer = () => {
+        if (!window.YT || !window.YT.Player) return false;
         try {
           activeYtPlayer = new YT.Player('lms-youtube-iframe', {
             events: {
+              'onReady': (event) => {
+                if (maxYtWatched > 1) {
+                  try { event.target.seekTo(maxYtWatched, true); } catch (e) {}
+                }
+              },
+              'onPlaybackRateChange': (event) => {
+                if (event.data !== 1) {
+                  try {
+                    event.target.setPlaybackRate(1);
+                    showToast('🔒 Kecepatan video dikunci pada 1.0x normal.', 'warning');
+                  } catch (e) {}
+                }
+              },
               'onStateChange': (event) => {
                 // YT.PlayerState.ENDED = 0
                 if (event.data === 0) {
@@ -3532,17 +3673,34 @@
               }
             }
           });
+          return true;
         } catch (e) {
-          console.warn('YouTube API init fallback:', e);
+          console.warn('YouTube Player API attach error:', e);
+          return false;
         }
+      };
+
+      if (!initYTPlayer()) {
+        const pollYT = setInterval(() => {
+          if (initYTPlayer()) clearInterval(pollYT);
+        }, 300);
+        setTimeout(() => clearInterval(pollYT), 6000);
       }
 
-      // Interval pelacak waktu tonton video aktif
+      // Interval pelacak waktu tonton video aktif & Anti-Skip Enforcer
       activeStudyInterval = setInterval(() => {
+        // Tab blur / ganti tab -> jeda video otomatis
         if (document.hidden) {
+          if (activeYtPlayer && typeof activeYtPlayer.pauseVideo === 'function' && typeof activeYtPlayer.getPlayerState === 'function') {
+            try {
+              if (activeYtPlayer.getPlayerState() === 1) { // 1 = PLAYING
+                activeYtPlayer.pauseVideo();
+              }
+            } catch (e) {}
+          }
           if (timerBadge && !timerBadge.classList.contains('paused')) {
             timerBadge.classList.add('paused');
-            if (timerText) timerText.textContent = 'Jeda (Tab Tidak Aktif)';
+            if (timerText) timerText.textContent = '⏸️ Video Dijeda (Tab Tidak Aktif)';
           }
           return;
         }
@@ -3551,11 +3709,27 @@
           timerBadge.classList.remove('paused');
         }
 
-        // Cek progres dari API jika ada
+        // Cek progres tonton dari API YouTube
         if (activeYtPlayer && typeof activeYtPlayer.getCurrentTime === 'function' && typeof activeYtPlayer.getDuration === 'function') {
           try {
             const cur = activeYtPlayer.getCurrentTime() || 0;
             const dur = activeYtPlayer.getDuration() || ytTarget;
+
+            // ANTI-SKIP PROTECTION: Jika mencoba memajukan slider YouTube melebihi waktu tonton
+            if (cur > maxYtWatched + 2.0 && dur > 5) {
+              activeYtPlayer.seekTo(maxYtWatched, true);
+              showToast('🔒 Anda tidak dapat melompati bagian video yang belum ditonton.', 'warning');
+            } else if (cur > maxYtWatched) {
+              maxYtWatched = cur;
+              AppState.unitVideoElapsed[currentUnit.id] = maxYtWatched;
+              localStorage.setItem('lms_video_elapsed_' + currentUnit.id, maxYtWatched.toString());
+            }
+
+            // Kunci playbackRate 1.0x
+            if (typeof activeYtPlayer.getPlaybackRate === 'function' && activeYtPlayer.getPlaybackRate() !== 1) {
+              activeYtPlayer.setPlaybackRate(1);
+            }
+
             if (dur > 0) {
               const curM = Math.floor(cur / 60);
               const curS = Math.floor(cur % 60);
@@ -3563,7 +3737,9 @@
               const durS = Math.floor(dur % 60);
               const pct = Math.min(100, Math.round((cur / dur) * 100));
 
-              if (timerText) timerText.textContent = `${curM}:${curS < 10 ? '0' : ''}${curS} / ${durM}:${durS < 10 ? '0' : ''}${durS} (${pct}%)`;
+              if (timerText && !timerBadge?.classList.contains('paused')) {
+                timerText.textContent = `${curM}:${curS < 10 ? '0' : ''}${curS} / ${durM}:${durS < 10 ? '0' : ''}${durS} (${pct}%)`;
+              }
               if (timerBar) timerBar.style.width = `${pct}%`;
 
               if (cur >= dur - 1.5 && dur > 5) {
@@ -3573,32 +3749,44 @@
                 return;
               }
             }
+            return;
           } catch (e) {}
         }
 
-        ytWatchedSeconds++;
-        const pct = Math.min(100, Math.round((ytWatchedSeconds / ytTarget) * 100));
+        // Fallback jika YouTube API dicegah oleh sandbox/extension
+        maxYtWatched++;
+        AppState.unitVideoElapsed[currentUnit.id] = maxYtWatched;
+        localStorage.setItem('lms_video_elapsed_' + currentUnit.id, maxYtWatched.toString());
+
+        const pct = Math.min(100, Math.round((maxYtWatched / ytTarget) * 100));
         if (timerBar) timerBar.style.width = `${pct}%`;
 
-        const rem = Math.max(0, ytTarget - ytWatchedSeconds);
+        const rem = Math.max(0, ytTarget - maxYtWatched);
         const remM = Math.floor(rem / 60);
-        const remS = rem % 60;
-        if (timerText && (!activeYtPlayer || !activeYtPlayer.getDuration)) {
+        const remS = Math.floor(rem % 60);
+        if (timerText) {
           timerText.textContent = `Menonton (${remM}:${remS < 10 ? '0' : ''}${remS} tersisa)`;
         }
 
-        if (ytWatchedSeconds >= ytTarget) {
+        if (maxYtWatched >= ytTarget) {
           clearActiveStudyTimer();
           showToast('🎉 Durasi tonton video terpenuhi! Sesi berikutnya telah terbuka.', 'success');
           markUnitComplete(currentUnit.id, course.id);
         }
-      }, 1000);
+      }, 500);
 
       return;
     }
 
-    // 3. Timer Belajar Otomatis untuk Materi Teks / Bacaan
-    let elapsedSeconds = 0;
+    // 3. Timer Belajar Otomatis untuk Materi Teks / Modul Bacaan
+    // Ambil waktu tonton/baca tersimpan (di memori atau LocalStorage) agar tidak pernah ter-reset
+    let savedElapsed = AppState.unitStudyElapsed[currentUnit.id];
+    if (savedElapsed === undefined || savedElapsed === null) {
+      const stored = localStorage.getItem('lms_study_elapsed_' + currentUnit.id);
+      savedElapsed = stored ? parseInt(stored, 10) : 0;
+    }
+    let elapsedSeconds = Math.min(savedElapsed || 0, targetSeconds);
+    AppState.unitStudyElapsed[currentUnit.id] = elapsedSeconds;
 
     const updateTimerDisplay = () => {
       const remaining = Math.max(0, targetSeconds - elapsedSeconds);
@@ -3607,7 +3795,7 @@
       const remStr = `${remM}:${remS < 10 ? '0' : ''}${remS}`;
       const percent = Math.min(100, Math.round((elapsedSeconds / targetSeconds) * 100));
 
-      if (timerText) {
+      if (timerText && !timerBadge?.classList.contains('paused')) {
         timerText.textContent = `${remStr} tersisa`;
       }
       if (timerBar) {
@@ -3625,7 +3813,7 @@
       if (document.hidden) {
         if (timerBadge && !timerBadge.classList.contains('paused')) {
           timerBadge.classList.add('paused');
-          if (timerText) timerText.textContent = 'Jeda (Tab Tidak Aktif)';
+          if (timerText) timerText.textContent = '⏸️ Terjeda (Tab Tidak Aktif)';
         }
         return;
       }
@@ -3635,6 +3823,8 @@
       }
 
       elapsedSeconds++;
+      AppState.unitStudyElapsed[currentUnit.id] = elapsedSeconds;
+      localStorage.setItem('lms_study_elapsed_' + currentUnit.id, elapsedSeconds.toString());
       updateTimerDisplay();
 
       // Durasi estimasi baca tuntas -> Buka kunci & Tandai Selesai!
@@ -4445,7 +4635,7 @@
     const existingSections = [...new Set((course?.contents || []).map(c => c.sectionName).filter(Boolean))];
     const datalistHtml = existingSections.map(s => `<option value="${escHtml(s)}"></option>`).join('');
 
-    const initialContentBody = unit.contentBody || '';
+    const initialContentBody = (unit.contentBody || '').replace(/<!--TYPE:tugas_[a-z]+-->\n?/gi, '');
 
     return `
       <form id="form-add-unit" onsubmit="handleSaveContent(event,'${courseId}','${editId || ''}')">
