@@ -1522,7 +1522,7 @@
       background: #e2e8f0;
     }
 
-    /* Dukungan Karakter & Tipografi Arab / RTL / Harakat */
+    /* Dukungan Karakter & Tipografi Arab / RTL / Harakat (Standar Word & Unicode Bidi) */
     .arabic-text, [dir="rtl"], .text-arabic {
       font-family: var(--font-arabic);
       direction: rtl;
@@ -1530,15 +1530,49 @@
       line-height: 2.3;
       font-size: 1.35rem;
       letter-spacing: 0;
-      word-spacing: 1px;
+      word-spacing: 1.5px;
+      unicode-bidi: isolate;
     }
-    .arabic-inline {
+    .arabic-inline, .inline-arabic, span[lang="ar"], bdi[dir="rtl"] {
       font-family: var(--font-arabic);
-      font-size: 1.2em;
+      font-size: 1.3em;
       direction: rtl;
-      unicode-bidi: embed;
+      unicode-bidi: isolate;
       line-height: 1.8;
       display: inline-block;
+      padding: 0 4px;
+      vertical-align: -0.1em;
+      color: #1e1b4b;
+    }
+    .arabic-vocab-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      background: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    .arabic-vocab-table th {
+      background: #f1f5f9;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: #334155;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    .arabic-vocab-table td {
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 0.875rem;
+    }
+    .arabic-vocab-table td.ar {
+      font-family: var(--font-arabic);
+      font-size: 1.35rem;
+      direction: rtl;
+      text-align: right;
+      line-height: 1.9;
+      color: #1e1b4b;
     }
     .player-content-body[dir="auto"],
     .exam-question-text[dir="auto"],

@@ -28,3 +28,19 @@ function getSupabase() {
   }
   return null;
 }
+
+// Client sekunder untuk pembuatan user baru oleh Admin tanpa mengganti sesi login admin saat ini
+function getSupabaseAuthAdmin() {
+  if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+    if (SUPABASE_CONFIG.URL.includes('YOUR_PROJECT_ID')) return null;
+    return window.supabase.createClient(SUPABASE_CONFIG.URL, SUPABASE_CONFIG.ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
+  }
+  return null;
+}
+
