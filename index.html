@@ -1013,7 +1013,8 @@
       font-family: var(--font-heading);
       line-height: 1.35;
       margin: 0;
-      word-break: break-word;
+      overflow-wrap: break-word;
+      word-break: normal;
     }
 
     .player-header-actions {
@@ -1141,7 +1142,8 @@
       line-height: 1.35;
       flex: 1;
       min-width: 0;
-      word-break: break-word;
+      overflow-wrap: break-word;
+      word-break: normal;
     }
     .player-standalone-subtext {
       font-size: 0.775rem;
@@ -1186,7 +1188,8 @@
       line-height: 1.4;
       flex: 1;
       min-width: 0;
-      word-break: break-word;
+      overflow-wrap: break-word;
+      word-break: normal;
     }
     .chapter-duration-badge {
       font-size: 0.75rem;
@@ -1246,7 +1249,8 @@
       font-weight: 600;
       color: #1e293b;
       line-height: 1.45;
-      word-break: break-word;
+      overflow-wrap: break-word;
+      word-break: normal;
     }
     .player-subitem.active .player-subitem-title {
       font-weight: 700;
@@ -2115,39 +2119,38 @@
       inset: 0;
       background: rgba(2, 36, 72, 0.45);
       backdrop-filter: blur(3px);
-      z-index: 35;
+      z-index: 45;
       opacity: 0;
       transition: opacity 0.3s ease;
+      pointer-events: none;
     }
 
-    @media (max-width: 1024px) {
-      .player-container {
-        grid-template-columns: 280px 1fr;
-      }
-      .grid-courses {
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      }
+    .sidebar-backdrop.active {
+      display: block;
+      opacity: 1;
+      pointer-events: auto;
     }
 
-    @media (max-width: 768px) {
-      /* Mobile Sidebar & Backdrop Drawer */
+    /* -----------------------------------------------------------------
+     * TIER 1: TABLET BREAKPOINT (max-width: 1100px)
+     * iPads (iPad Pro 13 1032px, iPad Pro 11 834px, iPad Air 820px, Surface Pro 912px)
+     * ----------------------------------------------------------------- */
+    @media (max-width: 1100px) {
+      /* Main App Sidebar becomes an Off-Canvas Drawer */
       .sidebar {
         transform: translateX(-100%);
         z-index: 50;
         width: 280px;
-        box-shadow: 0 0 25px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.25);
+        position: fixed;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       .sidebar.open {
         transform: translateX(0);
       }
 
-      .sidebar-backdrop.active {
-        display: block;
-        opacity: 1;
-      }
-
-      /* Full Width Content & Padding */
+      /* Main Wrapper expands to 100% full screen width */
       .main-wrapper {
         margin-left: 0 !important;
         width: 100% !important;
@@ -2155,55 +2158,128 @@
         overflow-x: hidden;
       }
 
-      .content-container {
-        padding: 1rem 0.875rem 2rem;
-        max-width: 100%;
-        box-sizing: border-box;
-      }
-
-      /* Topbar Mobile */
-      .topbar {
-        padding: 0 0.875rem;
-        gap: 0.5rem;
-      }
-
       .mobile-toggle-btn {
-        display: flex;
+        display: flex !important;
         align-items: center;
         justify-content: center;
       }
 
+      .content-container {
+        padding: 1.25rem 1rem 2.5rem;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+
+      /* Topbar adjustments */
+      .topbar {
+        padding: 0 1rem;
+        gap: 0.75rem;
+      }
+
       .topbar-title {
-        font-size: 1.05rem;
+        font-size: 1.15rem;
+        max-width: 240px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 160px;
       }
 
-      .role-switcher {
-        padding: 0.125rem;
+      .topbar-search-box input {
+        width: 120px;
       }
 
-      .role-btn {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.6875rem;
+      .topbar-search-box:focus-within input {
+        width: 170px;
       }
 
-      /* Grid & Cards on Mobile */
-      .grid-stats {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-        margin-bottom: 1.25rem;
+      /* Course Player on Tablet (screens between 861px and 1100px, e.g. iPad Pro 13 at 1032px) */
+      .player-container {
+        grid-template-columns: 340px 1fr;
+        gap: 1.25rem;
+        height: calc(100vh - var(--header-height) - 2rem);
+        min-height: 560px;
       }
 
-      .stat-card {
-        padding: 1rem;
+      .player-content-header {
+        padding: 1.15rem 1.35rem;
+        gap: 1rem;
       }
 
       .grid-courses {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.25rem;
+      }
+
+      .grid-stats {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 1rem;
+      }
+    }
+
+    /* -----------------------------------------------------------------
+     * TIER 2: PORTRAIT TABLET & PHABLET BREAKPOINT (max-width: 860px)
+     * Compact Tablets, Foldables, Large Smartphones
+     * ----------------------------------------------------------------- */
+    @media (max-width: 860px) {
+      /* Course Player stacks vertically: Content first, then Curriculum */
+      .player-container {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        min-height: auto !important;
+        gap: 1.25rem !important;
+      }
+
+      .player-content-area {
+        order: 1 !important;
+        width: 100% !important;
+        overflow: visible !important;
+      }
+
+      .player-sidebar {
+        order: 2 !important;
+        width: 100% !important;
+        max-height: 460px !important;
+      }
+
+      .player-content-body {
+        padding: 1.25rem 1rem !important;
+        max-height: none !important;
+        overflow-y: visible !important;
+      }
+
+      .player-content-header {
+        padding: 1rem 1.25rem !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.85rem !important;
+      }
+
+      .player-header-actions {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        width: 100% !important;
+        gap: 0.5rem !important;
+      }
+
+      .player-content-footer {
+        padding: 0.875rem 1rem !important;
+        flex-wrap: wrap !important;
+        gap: 0.75rem !important;
+      }
+
+      .player-content-footer-clean {
+        padding: 0.875rem 1.15rem !important;
+      }
+
+      .topbar-title {
+        font-size: 1.05rem;
+        max-width: 180px;
+      }
+
+      .search-kbd-badge {
+        display: none !important;
       }
 
       /* Admin Action Banner & Flex Containers */
@@ -2244,14 +2320,13 @@
         text-align: center !important;
       }
 
-      /* Responsive Flex Headers */
+      /* Responsive Flex Containers */
       div[style*="display:flex;align-items:center;justify-content:space-between"]:not(.topbar) {
         flex-direction: column !important;
         align-items: stretch !important;
         gap: 0.875rem !important;
       }
 
-      /* Auto-wrap button groups inside cards */
       div[style*="display:flex;gap:.5rem;"],
       div[style*="display:flex;gap:0.5rem;"] {
         flex-wrap: wrap !important;
@@ -2278,69 +2353,131 @@
         font-size: 0.8125rem;
         white-space: nowrap;
       }
+    }
 
-      /* Course Player Mobile */
-      .player-container {
-        grid-template-columns: 1fr;
-        height: auto;
-        gap: 1rem;
+    /* -----------------------------------------------------------------
+     * TIER 3: MOBILE PHONES BREAKPOINT (max-width: 640px)
+     * All Mobile Smartphones (iPhone, Galaxy, Pixel, etc.)
+     * ----------------------------------------------------------------- */
+    @media (max-width: 640px) {
+      .content-container {
+        padding: 0.75rem 0.65rem 2rem !important;
       }
 
+      .topbar {
+        padding: 0 0.75rem;
+        gap: 0.5rem;
+      }
+
+      .topbar-search-box {
+        display: none !important;
+      }
+
+      .breadcrumb-trail {
+        display: none !important;
+      }
+
+      .topbar-title {
+        font-size: 0.95rem !important;
+        max-width: 150px !important;
+      }
+
+      .user-role-pill {
+        padding: 0.25rem 0.5rem !important;
+        font-size: 0.7rem !important;
+      }
+
+      /* Grid & Cards on Mobile */
+      .grid-stats {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+        margin-bottom: 1rem !important;
+      }
+
+      .stat-card {
+        padding: 1rem !important;
+      }
+
+      .grid-courses {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+      }
+
+      /* Exam score table in mobile: 2x2 grid */
+      .exam-score-columns {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem !important;
+      }
+
+      .exam-intro-card,
+      .exam-question-item {
+        padding: 1rem 0.875rem !important;
+      }
+
+      /* Player specifics on mobile */
       .player-sidebar {
-        max-height: 220px;
+        max-height: 380px !important;
       }
 
       .player-content-body {
-        padding: 1.25rem 1rem;
+        padding: 1.15rem 0.85rem !important;
+        font-size: 0.9375rem !important;
       }
 
-      .player-content-header {
-        padding: 1rem;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
+      .player-unit-main-heading {
+        font-size: 1.15rem !important;
       }
 
-      .player-content-footer {
-        padding: 0.875rem 1rem;
-        flex-wrap: wrap;
-        gap: 0.5rem;
+      .btn-next-action {
+        width: 100% !important;
+        justify-content: center !important;
       }
 
-      /* Modal on Mobile */
+      .player-content-footer-clean {
+        padding: 0.75rem 1rem !important;
+      }
+
+      .player-content-footer-clean div[style*="justify-content:space-between"] {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.75rem !important;
+      }
+
+      /* Modal Dialog on Mobile */
       .modal-box {
-        max-width: 95vw;
-        border-radius: var(--radius-lg);
+        max-width: 95vw !important;
+        margin: 0.5rem !important;
+        border-radius: var(--radius-lg) !important;
       }
 
       .modal-body {
-        padding: 1rem;
-        max-height: calc(85vh - 120px);
+        padding: 1rem !important;
+        max-height: calc(85vh - 120px) !important;
       }
 
       .modal-header,
       .modal-footer {
-        padding: 0.875rem 1rem;
+        padding: 0.875rem 1rem !important;
       }
 
       /* Toast on Mobile: Floating Pill at Bottom Center */
       .toast-container {
-        bottom: 1.25rem;
-        right: 1rem;
-        left: 1rem;
-        align-items: center;
+        bottom: 1.25rem !important;
+        right: 1rem !important;
+        left: 1rem !important;
+        align-items: center !important;
       }
 
       .toast {
-        width: auto;
-        max-width: 92vw;
-        border-radius: var(--radius-full);
-        box-sizing: border-box;
-        box-shadow: 0 8px 24px rgba(2, 36, 72, 0.25);
-        padding: 0.625rem 1.25rem;
-        font-size: 0.8125rem;
-        text-align: center;
-        justify-content: center;
+        width: auto !important;
+        max-width: 92vw !important;
+        border-radius: var(--radius-full) !important;
+        box-sizing: border-box !important;
+        box-shadow: 0 8px 24px rgba(2, 36, 72, 0.25) !important;
+        padding: 0.625rem 1.25rem !important;
+        font-size: 0.8125rem !important;
+        text-align: center !important;
+        justify-content: center !important;
       }
     }
 
