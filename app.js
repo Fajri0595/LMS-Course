@@ -897,7 +897,7 @@
     if (!studentId) return;
     const { data, error } = await sb
       .from('progress')
-      .select('content_id, score, correct_answers, wrong_answers, time_spent_seconds, notes, status')
+      .select('content_id, score, correct_answers, wrong_answers, time_spent_seconds, notes, status, answers_data')
       .eq('student_id', studentId);
     if (error) return;
     const map = {};
@@ -1765,7 +1765,7 @@
     if (error) throw error;
   }
 
-  async function dbSubmitQuizResult({ contentId, courseId, score, correctAnswers, wrongAnswers, timeSpentSeconds, notes }) {
+  async function dbSubmitQuizResult({ contentId, courseId, score, correctAnswers, wrongAnswers, timeSpentSeconds, notes, reviewData = null }) {
     const sb = getSupabase();
     const studentId = AppState.user?.id;
     if (!sb || !studentId) return;
@@ -1779,6 +1779,7 @@
       wrong_answers: wrongAnswers,
       time_spent_seconds: timeSpentSeconds,
       notes,
+      answers_data: reviewData,
       completed_at: new Date().toISOString()
     }], { onConflict: 'student_id,content_id' });
     if (error) throw error;
@@ -1790,6 +1791,7 @@
   function navigateTo(viewId, param = null) {
     if (viewId !== 'course-player') {
       clearActiveStudyTimer();
+      clearQuizCountdownTimer();
     }
     AppState.currentView = viewId;
     try {
@@ -2597,15 +2599,14 @@
     const isCompleted = currentUnit.completed && !forceTest;
     const typeLower = (currentUnit.type || '').toLowerCase();
     const isQuizUnit = ['pre_exam', 'kuis_popup', 'post_exam', 'kuis'].includes(typeLower) || (currentUnit.quizData && currentUnit.quizData.length > 0);
+    const isReviewMode = AppState.quizReviewMode && AppState.quizReviewMode[currentUnit.id];
+    const showResultScreen = (isCompleted || AppState.progressMap[currentUnit.id]) && !isReviewMode;
 
     let contentHtml = '';
 
     if (isQuizUnit) {
-      const isReviewMode = AppState.quizReviewMode && AppState.quizReviewMode[currentUnit.id];
-      const showResultScreen = (isCompleted || AppState.progressMap[currentUnit.id]) && !isReviewMode;
-
       if (showResultScreen) {
-        // LAYAR HASIL SKOR (Persis Gambar 1)
+        // LAYAR HASIL SKOR
         const progress = AppState.progressData[currentUnit.id] || {};
         const questions = getEffectiveQuizData(currentUnit);
         const correctCount = progress.correct_answers !== undefined ? progress.correct_answers : Math.round((progress.score || 70) / 100 * questions.length);
@@ -2625,6 +2626,106 @@
             notes = score >= (currentUnit.passingScore || 70)
               ? 'Luar biasa! Kamu telah menguasai kompetensi pada unit ini dengan sangat baik. Pertahankan prestasimu!'
               : 'Nilai kamu masih di bawah batas kelulusan. Pelajari kembali materi dan gunakan tombol Kerjakan Ulang untuk meningkatkan nilai.';
+          }
+        }
+
+        // Ambil data review pengerjaan & pembahasan
+        let reviewData = progress.answers_data || (AppState.lastQuizResults && AppState.lastQuizResults[currentUnit.id]);
+        if (!reviewData) {
+          try {
+            const raw = localStorage.getItem('lms_quiz_review_' + currentUnit.id);
+            if (raw) reviewData = JSON.parse(raw);
+          } catch (e) {}
+        }
+        if (!reviewData) {
+          const effQ = getEffectiveQuizData(currentUnit);
+          if (effQ && effQ.length > 0) {
+            reviewData = {
+              unitId: currentUnit.id,
+              submittedAt: progress.completed_at || new Date().toISOString(),
+              score,
+              correctAnswers: correctCount,
+              wrongAnswers: wrongCount,
+              questions: effQ.map(q => ({
+                id: q.id,
+                question: q.question,
+                options: q.options,
+                answerIndex: q.answerIndex,
+                userAnswer: -1,
+                explanation: q.explanation || 'Pembahasan materi ini menguji penguasaan kaidah standar pada topik pembelajaran.'
+              }))
+            };
+          }
+        }
+
+        const isExpOpen = AppState.quizExplanationOpen && AppState.quizExplanationOpen[currentUnit.id];
+        let explanationSectionHtml = '';
+
+        if (reviewData && Array.isArray(reviewData.questions) && reviewData.questions.length > 0) {
+          if (isExpOpen) {
+            const itemsHtml = reviewData.questions.map((q, idx) => {
+              const userAns = q.userAnswer;
+              const isAnswered = typeof userAns === 'number' && userAns >= 0;
+              const isCorrect = isAnswered && userAns === q.answerIndex;
+              const optionsHtml = q.options.map((opt, optIdx) => {
+                const isUserChoice = userAns === optIdx;
+                const isActualCorrect = optIdx === q.answerIndex;
+                let optClass = 'exam-review-opt';
+                let tag = '';
+
+                if (isUserChoice && isActualCorrect) {
+                  optClass += ' user-correct';
+                  tag = '<span class="badge" style="background:#16a34a;color:#ffffff;font-size:0.7rem;padding:0.15rem 0.45rem;">✓ Jawaban Anda Benar</span>';
+                } else if (isUserChoice && !isActualCorrect) {
+                  optClass += ' user-wrong';
+                  tag = '<span class="badge" style="background:#dc2626;color:#ffffff;font-size:0.7rem;padding:0.15rem 0.45rem;">✕ Pilihan Anda (Salah)</span>';
+                } else if (isActualCorrect) {
+                  optClass += ' actual-correct';
+                  tag = '<span class="badge" style="background:#059669;color:#ffffff;font-size:0.7rem;padding:0.15rem 0.45rem;">★ Kunci Jawaban Benar</span>';
+                }
+
+                return `
+                  <div class="${optClass}">
+                    <span style="line-height:1.4;" dir="auto">${escHtml(opt)}</span>
+                    ${tag}
+                  </div>
+                `;
+              }).join('');
+
+              let statusBadge = '';
+              if (!isAnswered) {
+                statusBadge = '<span class="badge" style="background:#f1f5f9;color:#64748b;font-weight:700;">⚪ Tidak Terjawab</span>';
+              } else if (isCorrect) {
+                statusBadge = '<span class="badge" style="background:#dcfce7;color:#166534;font-weight:700;">✅ Jawaban Benar</span>';
+              } else {
+                statusBadge = '<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:700;">❌ Jawaban Salah</span>';
+              }
+
+              return `
+                <div class="exam-review-item ${isCorrect ? 'correct' : (isAnswered ? 'wrong' : '')}">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+                    <strong style="color:var(--primary);font-size:0.95rem;">Soal #${idx + 1}</strong>
+                    ${statusBadge}
+                  </div>
+                  <div class="exam-question-text" dir="auto" style="margin-bottom:0.75rem;">${escHtml(q.question)}</div>
+                  <div style="margin-bottom:0.5rem;">${optionsHtml}</div>
+                  <div class="exam-explanation-box">
+                    💡 <strong>Pembahasan &amp; Konsep Materi:</strong><br>
+                    ${escHtml(q.explanation || 'Pembahasan materi ini menguji penguasaan kaidah standar pada topik pembelajaran.')}
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            explanationSectionHtml = `
+              <div id="quiz-explanation-container" style="width:100%;margin-top:1.5rem;text-align:left;">
+                <div style="background:#f1f5f9;border:1px solid #cbd5e1;padding:0.75rem 1rem;border-radius:8px;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;">
+                  <strong style="color:var(--primary);font-size:0.95rem;">📑 Lembar Jawaban &amp; Pembahasan Soal</strong>
+                  <span style="font-size:0.8125rem;color:var(--tertiary);">${reviewData.questions.length} Soal Selesai Diulas</span>
+                </div>
+                ${itemsHtml}
+              </div>
+            `;
           }
         }
 
@@ -2666,18 +2767,27 @@
               </p>
             </div>
 
-            <div style="margin-top:1rem;display:flex;gap:.75rem;">
+            <div style="margin-top:0.5rem;display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center;">
               <button class="btn btn-outline btn-sm" onclick="retakeQuiz(${AppState.activeUnitIndex})">
                 🔄 Kerjakan Ulang
               </button>
+              ${reviewData && Array.isArray(reviewData.questions) && reviewData.questions.length > 0 ? `
+                <button class="btn btn-primary btn-sm" onclick="toggleQuizExplanation('${currentUnit.id}')" style="font-weight:600;">
+                  ${isExpOpen ? '🙈 Tutup Pembahasan' : '📖 Lihat Pembahasan & Kunci Jawaban'}
+                </button>
+              ` : ''}
             </div>
+
+            ${explanationSectionHtml}
           </div>
         `;
       } else {
-        // FORM PENGERJAAN KUIS / EXAM
-        const questions = getEffectiveQuizData(currentUnit);
+        // FORM PENGERJAAN KUIS / EXAM (DENGAN COUNTDOWN TIMER & SOAL/OPSI TERACAK)
+        const questions = getShuffledQuizSession(currentUnit);
         if (!AppState.activeQuizStartTime) AppState.activeQuizStartTime = Date.now();
         const answers = AppState.activeQuizAnswers || {};
+        const durationMinutes = parseDurationMinutes(currentUnit.duration, 15);
+        const initialTimerStr = `${String(durationMinutes).padStart(2, '0')}:00`;
 
         const questionsHtml = questions.map((q, qIdx) => {
           const selectedOpt = answers[q.id];
@@ -2699,14 +2809,28 @@
 
         contentHtml = `
           <div class="exam-container">
+            <!-- Countdown Timer Bar -->
+            <div class="exam-countdown-bar">
+              <div style="display:flex;align-items:center;gap:0.5rem;">
+                <span style="font-size:1.15rem;">⏱️</span>
+                <span>Batas Waktu Pengerjaan Ujian:</span>
+              </div>
+              <div class="exam-countdown-timer" id="quiz-countdown-timer-display" title="Hitung mundur sisa waktu ujian">
+                ${initialTimerStr}
+              </div>
+            </div>
+
             <div class="exam-intro-card" dir="auto">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:0.4rem;">
                 <span class="badge badge-primary">${currentUnit.type === 'pre_exam' ? 'Pra-Pembelajaran' : 'Uji Pemahaman'}</span>
-                <span style="font-size:0.8125rem;color:var(--tertiary);font-weight:600;">⏱️ Estimasi: ${escHtml(currentUnit.duration || '15 Menit')}</span>
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  <span class="badge" style="background:#f1f5f9;color:#475569;font-size:0.75rem;">🔀 Soal &amp; Opsi Diacak</span>
+                  <span style="font-size:0.8125rem;color:var(--tertiary);font-weight:600;">⏱️ ${durationMinutes} Menit</span>
+                </div>
               </div>
               <h3 style="margin-bottom:.5rem;">${escHtml(currentUnit.title)}</h3>
-              <p style="color:var(--tertiary);font-size:0.875rem;line-height:1.5;">
-                Pilihlah salah satu jawaban yang paling tepat untuk setiap pertanyaan di bawah ini.
+              <p style="color:var(--tertiary);font-size:0.875rem;line-height:1.5;margin:0;">
+                Pilihlah salah satu jawaban yang paling tepat. Jawaban akan otomatis dikumpulkan jika waktu ujian habis.
               </p>
             </div>
 
@@ -2714,7 +2838,7 @@
 
             <div style="text-align:center;margin-top:1.5rem;padding-bottom:2rem;">
               <button class="btn btn-primary" style="padding:0.75rem 2.5rem;font-size:1rem;" onclick="submitActiveQuiz(${AppState.activeUnitIndex})">
-                🚀 Kumpulkan & Periksa Jawaban
+                🚀 Kumpulkan &amp; Periksa Jawaban
               </button>
             </div>
           </div>
@@ -3449,7 +3573,14 @@
 
     // Pasang listener penguncian video dan timer belajar otomatis jika bukan kuis
     if (!isQuizUnit) {
+      clearQuizCountdownTimer();
       initUnitInteractions(currentUnit, course, targetSeconds, isVideoUnit);
+    } else {
+      if (!showResultScreen) {
+        startQuizCountdownTimer(currentUnit, AppState.activeUnitIndex);
+      } else {
+        clearQuizCountdownTimer();
+      }
     }
   }
 
@@ -3682,6 +3813,128 @@
     }
   }
 
+  function parseDurationMinutes(durStr, defaultMinutes = 15) {
+    if (durStr && typeof durStr === 'string') {
+      const str = durStr.toLowerCase();
+      const match = str.match(/\d+(\.\d+)?/);
+      if (match) {
+        const val = parseFloat(match[0]);
+        if (str.includes('detik') || str.includes('sec')) {
+          return Math.max(1, Math.ceil(val / 60));
+        }
+        if (str.includes('jam') || str.includes('hour')) {
+          return Math.max(1, Math.round(val * 60));
+        }
+        return Math.max(1, Math.round(val));
+      }
+    }
+    return defaultMinutes;
+  }
+
+  function shuffleArray(arr) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
+  function getShuffledQuizSession(unit, forceReshuffle = false) {
+    if (!unit) return [];
+    if (!AppState.activeQuizSession) AppState.activeQuizSession = {};
+    if (!forceReshuffle && AppState.activeQuizSession[unit.id]) {
+      return AppState.activeQuizSession[unit.id];
+    }
+
+    const baseQuestions = getEffectiveQuizData(unit);
+    const preparedQuestions = baseQuestions.map(q => {
+      const originalOpts = Array.isArray(q.options) ? q.options : [];
+      const originalAnswer = typeof q.answerIndex === 'number' ? q.answerIndex : 0;
+      
+      const mappedOpts = originalOpts.map((optText, optIdx) => ({
+        text: optText,
+        isCorrect: optIdx === originalAnswer,
+        originalIndex: optIdx
+      }));
+
+      const shuffledOpts = shuffleArray(mappedOpts);
+      const newAnswerIndex = shuffledOpts.findIndex(o => o.isCorrect);
+
+      return {
+        id: q.id,
+        question: q.question,
+        options: shuffledOpts.map(o => o.text),
+        answerIndex: newAnswerIndex >= 0 ? newAnswerIndex : 0,
+        explanation: q.explanation || ''
+      };
+    });
+
+    const shuffledQuestions = shuffleArray(preparedQuestions);
+    AppState.activeQuizSession[unit.id] = shuffledQuestions;
+    return shuffledQuestions;
+  }
+
+  function clearQuizCountdownTimer() {
+    if (AppState.quizCountdownInterval) {
+      clearInterval(AppState.quizCountdownInterval);
+      AppState.quizCountdownInterval = null;
+    }
+  }
+  window.clearQuizCountdownTimer = clearQuizCountdownTimer;
+
+  function startQuizCountdownTimer(unit, unitIdx) {
+    clearQuizCountdownTimer();
+    if (!unit) return;
+
+    const durationMinutes = parseDurationMinutes(unit.duration, 15);
+    const totalSecs = durationMinutes * 60;
+
+    // Pertahankan sisa waktu jika sedang berada di unit yang sama
+    if (AppState.activeQuizTimerUnitId !== unit.id || !AppState.activeQuizTimerStart) {
+      AppState.activeQuizTimerUnitId = unit.id;
+      AppState.activeQuizTimerTotalSecs = totalSecs;
+      AppState.activeQuizTimerStart = Date.now();
+    }
+
+    const updateTimerDisplay = () => {
+      const elapsed = Math.floor((Date.now() - AppState.activeQuizTimerStart) / 1000);
+      const remaining = Math.max(0, AppState.activeQuizTimerTotalSecs - elapsed);
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      const formatted = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+      const timerEl = document.getElementById('quiz-countdown-timer-display');
+      if (timerEl) {
+        timerEl.textContent = formatted;
+        timerEl.classList.toggle('warning', remaining <= 180 && remaining > 60);
+        timerEl.classList.toggle('critical', remaining <= 60);
+      }
+
+      if (remaining <= 0) {
+        clearQuizCountdownTimer();
+        delete AppState.activeQuizTimerUnitId;
+        delete AppState.activeQuizTimerStart;
+        delete AppState.activeQuizTimerTotalSecs;
+        showToast('⏰ Waktu ujian telah habis! Jawaban Anda otomatis dikumpulkan.', 'info');
+        submitActiveQuiz(unitIdx, true);
+      }
+    };
+
+    updateTimerDisplay();
+    AppState.quizCountdownInterval = setInterval(updateTimerDisplay, 1000);
+  }
+  window.startQuizCountdownTimer = startQuizCountdownTimer;
+
+  function toggleQuizExplanation(unitId) {
+    if (!AppState.quizExplanationOpen) AppState.quizExplanationOpen = {};
+    AppState.quizExplanationOpen[unitId] = !AppState.quizExplanationOpen[unitId];
+    if (AppState.activeCoursePlayer) {
+      renderCoursePlayer(document.getElementById('view-container'), AppState.activeCoursePlayer.id);
+    }
+  }
+  window.toggleQuizExplanation = toggleQuizExplanation;
+
   function getEffectiveQuizData(unit) {
     if (unit.quizData && Array.isArray(unit.quizData) && unit.quizData.length > 0) {
       return unit.quizData;
@@ -3727,30 +3980,39 @@
     ];
   }
 
-  async function submitActiveQuiz(unitIdx) {
+  async function submitActiveQuiz(unitIdx, isAutoSubmit = false) {
     const course = AppState.activeCoursePlayer;
     if (!course) return;
     const unit = course.contents[unitIdx];
-    const questions = getEffectiveQuizData(unit);
+    if (!unit) return;
+
+    const questions = getShuffledQuizSession(unit);
     const answers = AppState.activeQuizAnswers || {};
 
-    const unanswered = questions.filter(q => answers[q.id] === undefined);
-    if (unanswered.length > 0) {
-      showToast(`⚠️ Harap jawab seluruh pertanyaan (${questions.length - unanswered.length}/${questions.length} terjawab).`, 'warning');
-      return;
+    if (!isAutoSubmit) {
+      const unanswered = questions.filter(q => answers[q.id] === undefined);
+      if (unanswered.length > 0) {
+        showToast(`⚠️ Harap jawab seluruh pertanyaan (${questions.length - unanswered.length}/${questions.length} terjawab).`, 'warning');
+        return;
+      }
     }
+
+    clearQuizCountdownTimer();
+    delete AppState.activeQuizTimerUnitId;
+    delete AppState.activeQuizTimerStart;
+    delete AppState.activeQuizTimerTotalSecs;
 
     let correct = 0;
     questions.forEach(q => {
       if (answers[q.id] === q.answerIndex) correct++;
     });
     const wrong = questions.length - correct;
-    const score = Math.round((correct / questions.length) * 100);
+    const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
     const passingScore = unit.passingScore || 60;
 
     const now = Date.now();
     const start = AppState.activeQuizStartTime || (now - (correct * 90 + wrong * 50) * 1000);
-    const elapsedSecs = Math.max(45, Math.round((now - start) / 1000));
+    const elapsedSecs = Math.max(30, Math.round((now - start) / 1000));
 
     const isPreExam = (unit.type || '').toLowerCase() === 'pre_exam' || unit.title.toLowerCase().includes('pre-exam');
     let notes = '';
@@ -3764,12 +4026,41 @@
         : 'Nilai kamu masih di bawah batas kelulusan. Pelajari kembali materi dan gunakan tombol Kerjakan Ulang untuk meningkatkan nilai.';
     }
 
+    const reviewQuestions = questions.map(q => {
+      const userChoice = answers[q.id] !== undefined ? answers[q.id] : -1;
+      return {
+        id: q.id,
+        question: q.question,
+        options: q.options,
+        answerIndex: q.answerIndex,
+        userAnswer: userChoice,
+        explanation: q.explanation || 'Pembahasan materi ini menguji penguasaan kaidah standar pada topik pembelajaran.'
+      };
+    });
+
+    const reviewData = {
+      unitId: unit.id,
+      submittedAt: new Date().toISOString(),
+      score,
+      correctAnswers: correct,
+      wrongAnswers: wrong,
+      questions: reviewQuestions
+    };
+
+    if (!AppState.lastQuizResults) AppState.lastQuizResults = {};
+    AppState.lastQuizResults[unit.id] = reviewData;
+
+    try {
+      localStorage.setItem('lms_quiz_review_' + unit.id, JSON.stringify(reviewData));
+    } catch (e) {}
+
     const progressItem = {
       score,
       correct_answers: correct,
       wrong_answers: wrong,
       time_spent_seconds: elapsedSecs,
-      notes
+      notes,
+      answers_data: reviewData
     };
     if (!AppState.progressData) AppState.progressData = {};
     AppState.progressData[unit.id] = progressItem;
@@ -3787,26 +4078,42 @@
         correctAnswers: correct,
         wrongAnswers: wrong,
         timeSpentSeconds: elapsedSecs,
-        notes
+        notes,
+        reviewData
       });
-      showToast('🎉 Ujian selesai & nilai tersimpan!', 'success');
+      showToast(isAutoSubmit ? '⏰ Waktu habis! Jawaban tersimpan.' : '🎉 Ujian selesai & nilai tersimpan!', 'success');
     } catch (err) {
       console.warn('Simpan kuis lokal:', err);
     }
 
     renderCoursePlayer(document.getElementById('view-container'), course.id);
   }
+  window.submitActiveQuiz = submitActiveQuiz;
 
   function retakeQuiz(unitIdx) {
     const course = AppState.activeCoursePlayer;
     if (!course) return;
     const unit = course.contents[unitIdx];
+    if (!unit) return;
+
+    clearQuizCountdownTimer();
+    delete AppState.activeQuizTimerUnitId;
+    delete AppState.activeQuizTimerStart;
+    delete AppState.activeQuizTimerTotalSecs;
+
+    // Hapus sesi acak lama dan acak ulang susunan soal & opsi
+    if (AppState.activeQuizSession) {
+      delete AppState.activeQuizSession[unit.id];
+    }
+    getShuffledQuizSession(unit, true);
+
     if (!AppState.quizReviewMode) AppState.quizReviewMode = {};
     AppState.quizReviewMode[unit.id] = true;
     AppState.activeQuizAnswers = {};
     AppState.activeQuizStartTime = Date.now();
     renderCoursePlayer(document.getElementById('view-container'), course.id);
   }
+  window.retakeQuiz = retakeQuiz;
 
   async function onNextButtonClicked() {
     const course = AppState.activeCoursePlayer;
@@ -3893,6 +4200,7 @@
       showToast(`🔒 Sesi ini terkunci! Selesaikan "${prevTitle}" terlebih dahulu.`, 'warning');
       return;
     }
+    clearQuizCountdownTimer();
     AppState.activeUnitIndex = idx;
     const currentUnit = course.contents[idx];
     const chName = currentUnit?.sectionName || (currentUnit?.moduleId && course.modules?.find(m => m.id === currentUnit.moduleId)?.title);
@@ -3923,6 +4231,7 @@
         showToast('🔒 Selesaikan sesi saat ini terlebih dahulu untuk melanjutkan.', 'warning');
         return;
       }
+      clearQuizCountdownTimer();
       AppState.activeUnitIndex = nextIdx;
       const nextUnit = course.contents[nextIdx];
       const chName = nextUnit?.sectionName || (nextUnit?.moduleId && course.modules?.find(m => m.id === nextUnit.moduleId)?.title);
@@ -3947,6 +4256,7 @@
 
   function prevPlayerUnit() {
     if (AppState.activeUnitIndex > 0) {
+      clearQuizCountdownTimer();
       AppState.activeUnitIndex--;
       const prevUnit = AppState.activeCoursePlayer?.contents[AppState.activeUnitIndex];
       const chName = prevUnit?.sectionName || (prevUnit?.moduleId && AppState.activeCoursePlayer?.modules?.find(m => m.id === prevUnit.moduleId)?.title);

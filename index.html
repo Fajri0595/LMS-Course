@@ -1244,6 +1244,106 @@
       margin: 0;
     }
 
+    /* Countdown Timer Bar & Badge */
+    .exam-countdown-bar {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 0.75rem 1.15rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+    .exam-countdown-timer {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #ede9fe;
+      color: #4f46e5;
+      padding: 0.35rem 0.85rem;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.9375rem;
+      letter-spacing: 0.05em;
+      transition: all 0.3s ease;
+    }
+    .exam-countdown-timer.warning {
+      background: #fef3c7;
+      color: #b45309;
+    }
+    .exam-countdown-timer.critical {
+      background: #fee2e2;
+      color: #dc2626;
+      animation: pulseTimer 1s infinite alternate;
+    }
+    @keyframes pulseTimer {
+      from { transform: scale(1); opacity: 1; }
+      to { transform: scale(1.04); opacity: 0.85; }
+    }
+
+    /* Exam Question Review & Explanation Styles */
+    .exam-review-item {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 1.25rem 1.35rem;
+      margin-bottom: 1rem;
+      text-align: left;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+    .exam-review-item.correct {
+      border-left: 4px solid #10b981;
+    }
+    .exam-review-item.wrong {
+      border-left: 4px solid #ef4444;
+    }
+    .exam-review-opt {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.6rem 0.85rem;
+      border-radius: 8px;
+      margin-bottom: 0.4rem;
+      font-size: 0.875rem;
+      border: 1px solid #f1f5f9;
+      background: #f8fafc;
+      transition: all 0.15s ease;
+    }
+    .exam-review-opt.user-correct {
+      background: #dcfce7;
+      border-color: #86efac;
+      color: #166534;
+      font-weight: 600;
+    }
+    .exam-review-opt.user-wrong {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #991b1b;
+      font-weight: 600;
+    }
+    .exam-review-opt.actual-correct {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+      color: #047857;
+      font-weight: 600;
+    }
+    .exam-explanation-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: #1e40af;
+      line-height: 1.5;
+    }
+
     /* Result Screen Box */
     .exam-result-box {
       display: flex;
