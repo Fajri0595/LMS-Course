@@ -37,17 +37,6 @@
     unitStudyElapsed: {},     // { [unitId]: seconds }
     unitVideoElapsed: {},     // { [unitId]: seconds }
     forceTestAntiSkip: {},    // { [unitId]: boolean }
-    arabicFontSize: (() => {
-      try {
-        const val = localStorage.getItem('lms_arabic_font_size');
-        return val ? parseInt(val, 10) : 100;
-      } catch (e) { return 100; }
-    })(),
-    arabicFontFamily: (() => {
-      try {
-        return localStorage.getItem('lms_arabic_font_family') || 'amiri';
-      } catch (e) { return 'amiri'; }
-    })(),
     isDemoMode: false
   };
 
@@ -4710,17 +4699,7 @@
               <h2 style="font-size:1.2rem;margin:0;" dir="auto">${escHtml(currentUnit.title)}</h2>
               ${timerWidgetHtml}
             </div>
-            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
-              <!-- Arabic Font Customization Toolbar -->
-              <div class="arabic-font-toolbar" title="Pengaturan Ukuran & Gaya Font Teks Arab / Latin (80% - 180%)">
-                <button type="button" class="btn-tool-mini" onclick="adjustArabicFontSize(-10)" title="Kecilkan Teks (A-)">A-</button>
-                <span class="arabic-font-size-badge" id="arabic-font-size-label" title="Ukuran teks aktif">${AppState.arabicFontSize || 100}%</span>
-                <button type="button" class="btn-tool-mini" onclick="adjustArabicFontSize(10)" title="Besarkan Teks (A+)">A+</button>
-                <span style="color:#cbd5e1;padding:0 2px;">|</span>
-                <button type="button" class="btn-tool-mini" onclick="toggleArabicFontFamily()" id="arabic-font-toggle-btn" title="Beralih font tulisan Arab (Amiri Quran / Traditional Naskh)">
-                  ع ${AppState.arabicFontFamily === 'naskh' ? 'Traditional Naskh' : 'Amiri Quran'}
-                </button>
-              </div>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
               ${simulationToggleHtml}
               <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Mode Layar Penuh (Fullscreen)">
                 🖥️ Fullscreen
@@ -4728,7 +4707,7 @@
             </div>
           </div>
 
-          <div class="player-content-body ${AppState.arabicFontFamily === 'naskh' ? 'arabic-font-naskh' : 'arabic-font-amiri'}" id="player-body" dir="auto" style="--content-scale:${(AppState.arabicFontSize || 100) / 100}; font-size:${AppState.arabicFontSize || 100}%;">
+          <div class="player-content-body" id="player-body" dir="auto">
             ${contentHtml}
           </div>
 
@@ -8601,50 +8580,6 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     }
   }
   window.handleGlobalSearch = handleGlobalSearch;
-
-  function adjustArabicFontSize(delta) {
-    if (!AppState.arabicFontSize) AppState.arabicFontSize = 100;
-    AppState.arabicFontSize = Math.min(180, Math.max(80, AppState.arabicFontSize + delta));
-    const playerBody = document.getElementById('player-body');
-    const scale = AppState.arabicFontSize / 100;
-    if (playerBody) {
-      playerBody.style.setProperty('--content-scale', scale);
-      playerBody.style.fontSize = `${AppState.arabicFontSize}%`;
-    }
-    const label = document.getElementById('arabic-font-size-label');
-    if (label) {
-      label.textContent = `${AppState.arabicFontSize}%`;
-    }
-    showToast(`🔍 Ukuran font teks: ${AppState.arabicFontSize}%`, 'info');
-    try {
-      localStorage.setItem('lms_arabic_font_size', String(AppState.arabicFontSize));
-    } catch (e) {}
-  }
-  window.adjustArabicFontSize = adjustArabicFontSize;
-
-  function toggleArabicFontFamily() {
-    AppState.arabicFontFamily = AppState.arabicFontFamily === 'naskh' ? 'amiri' : 'naskh';
-    const playerBody = document.getElementById('player-body');
-    const toggleBtn = document.getElementById('arabic-font-toggle-btn');
-    if (playerBody) {
-      if (AppState.arabicFontFamily === 'naskh') {
-        playerBody.classList.remove('arabic-font-amiri');
-        playerBody.classList.add('arabic-font-naskh');
-      } else {
-        playerBody.classList.remove('arabic-font-naskh');
-        playerBody.classList.add('arabic-font-amiri');
-      }
-    }
-    const fontLabel = AppState.arabicFontFamily === 'naskh' ? 'Traditional Naskh' : 'Amiri Quran';
-    if (toggleBtn) {
-      toggleBtn.innerHTML = `ع ${fontLabel}`;
-    }
-    showToast(`🔤 Font tulisan berganti: ${fontLabel}`, 'info');
-    try {
-      localStorage.setItem('lms_arabic_font_family', AppState.arabicFontFamily);
-    } catch (e) {}
-  }
-  window.toggleArabicFontFamily = toggleArabicFontFamily;
 
   // Shortcut keyboard Ctrl + K / Cmd + K untuk quick search
   window.addEventListener('keydown', (e) => {
