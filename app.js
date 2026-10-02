@@ -107,6 +107,8 @@
     AppState.user = null;
     AppState.authUser = null;
     AppState.isDemoMode = false;
+    AppState.authMode = 'login';
+    AppState.loginScreen = 'welcome'; // 'welcome' | 'login' | 'register'
     document.getElementById('app-root').style.display = 'none';
 
     let loginEl = document.getElementById('login-overlay');
@@ -116,9 +118,30 @@
       document.body.appendChild(loginEl);
     }
 
+    renderLoginScreen(loginEl);
+  }
+
+  function renderLoginScreen(loginEl) {
+    if (!loginEl) loginEl = document.getElementById('login-overlay');
+    if (!loginEl) return;
+
+    const screen = AppState.loginScreen || 'welcome';
+
+    if (screen === 'welcome') {
+      renderWelcomeScreen(loginEl);
+    } else if (screen === 'login') {
+      renderLoginFormScreen(loginEl);
+    } else if (screen === 'register') {
+      renderRegisterFormScreen(loginEl);
+    }
+
+    loginEl.style.display = 'flex';
+  }
+
+  function renderWelcomeScreen(loginEl) {
     loginEl.innerHTML = `
       <div class="login-page">
-        <div class="login-card">
+        <div class="login-card" style="max-width:480px;">
           <div class="login-brand">
             <div class="brand-logo">C</div>
             <div>
@@ -127,15 +150,76 @@
             </div>
           </div>
 
+          <p style="text-align:center;color:var(--tertiary);font-size:0.875rem;line-height:1.5;margin-bottom:1.75rem;">
+            Selamat datang di CourseHub! Silakan pilih untuk masuk ke akun yang sudah terdaftar, atau buat akun baru.
+          </p>
+
+          <!-- Dua Kartu Pilihan -->
+          <div class="login-welcome-choices">
+            <button type="button" class="login-choice-card" onclick="goToLoginScreen()">
+              <div class="login-choice-icon">🔑</div>
+              <div class="login-choice-title">Masuk</div>
+              <div class="login-choice-desc">Saya sudah memiliki akun</div>
+            </button>
+            <button type="button" class="login-choice-card login-choice-register" onclick="goToRegisterScreen()">
+              <div class="login-choice-icon">✨</div>
+              <div class="login-choice-title">Daftar Akun Baru</div>
+              <div class="login-choice-desc">Saya belum memiliki akun</div>
+            </button>
+          </div>
+
+          <div class="login-divider" style="margin:1.5rem 0 1rem;">
+            <span>atau langsung masuk dengan</span>
+          </div>
+
+          <!-- Google OAuth Cepat (langsung sebagai siswa) -->
+          <button type="button" class="btn-google-login" id="login-google-btn-welcome" onclick="handleGoogleLoginWelcome()">
+            <svg class="google-icon" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span>Masuk / Daftar dengan Google</span>
+          </button>
+
+          <p style="text-align:center;font-size:0.75rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
+            Dengan masuk, Anda menyetujui ketentuan layanan dan kebijakan privasi CourseHub LMS.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLoginFormScreen(loginEl) {
+    const target = AppState.activeLoginTab || 'student';
+    const labels = {
+      student: { email: 'Email Peserta Didik', btn: 'Masuk sebagai Peserta Didik', hint: 'Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.', google: 'Masuk sebagai Siswa dengan Google', placeholder: 'contoh: siswa@institusi.ac.id' },
+      educator: { email: 'Email Tutor Pengampu', btn: 'Masuk sebagai Tutor', hint: 'Portal khusus Tutor Pengampu. Masuk untuk mengelola materi, jadwal Zoom, dan verifikasi kelulusan tema.', google: 'Masuk sebagai Tutor dengan Google', placeholder: 'contoh: tutor@institusi.ac.id' },
+      admin: { email: 'Email Administrator', btn: 'Masuk sebagai Administrator', hint: 'Portal Administrator Pusat Institusi. Akses pengaturan sistem, data pengguna, dan seluruh kurikulum.', google: 'Masuk sebagai Admin dengan Google', placeholder: 'contoh: admin@institusi.ac.id' }
+    };
+    const l = labels[target];
+
+    loginEl.innerHTML = `
+      <div class="login-page">
+        <div class="login-card">
+          <div class="login-brand">
+            <div class="brand-logo">C</div>
+            <div>
+              <h1 class="brand-title">Masuk ke CourseHub</h1>
+              <p class="brand-subtitle">Silakan pilih peran dan masukkan kredensial Anda</p>
+            </div>
+          </div>
+
           <!-- Tab Switcher: Peserta Didik vs Tutor vs Administrator -->
           <div class="auth-tabs">
-            <button type="button" class="auth-tab-btn active" id="tab-btn-peserta" onclick="switchLoginRole('student')">
+            <button type="button" class="auth-tab-btn ${target === 'student' ? 'active' : ''}" id="tab-btn-peserta" onclick="switchLoginRole('student')">
               Peserta Didik
             </button>
-            <button type="button" class="auth-tab-btn" id="tab-btn-tutor" onclick="switchLoginRole('educator')">
+            <button type="button" class="auth-tab-btn ${target === 'educator' ? 'active' : ''}" id="tab-btn-tutor" onclick="switchLoginRole('educator')">
               Tutor
             </button>
-            <button type="button" class="auth-tab-btn" id="tab-btn-admin" onclick="switchLoginRole('admin')">
+            <button type="button" class="auth-tab-btn ${target === 'admin' ? 'active' : ''}" id="tab-btn-admin" onclick="switchLoginRole('admin')">
               Admin
             </button>
           </div>
@@ -151,79 +235,184 @@
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
             </svg>
-            <span id="login-google-text">Masuk sebagai Siswa dengan Google</span>
+            <span id="login-google-text">${l.google}</span>
           </button>
 
           <div class="login-divider">
             <span>atau masuk dengan email & password</span>
           </div>
 
-          <!-- FORM LOGIN & DAFTAR (Peserta Didik, Tutor & Admin) -->
+          <!-- FORM LOGIN -->
           <form id="form-login" onsubmit="handleAuthSubmit(event)">
-            <div id="register-name-group" class="form-group" style="display:none;">
-              <label class="form-label">Nama Lengkap</label>
-              <input type="text" id="register-name" class="form-control" placeholder="contoh: Muhammad Farhan">
-            </div>
             <div class="form-group">
-              <label class="form-label" id="login-email-label">Email Peserta Didik</label>
-              <input type="email" id="login-email" class="form-control" placeholder="contoh: siswa@institusi.ac.id" required autocomplete="email">
+              <label class="form-label" id="login-email-label">${l.email}</label>
+              <input type="email" id="login-email" class="form-control" placeholder="${l.placeholder}" required autocomplete="email">
             </div>
             <div class="form-group">
               <label class="form-label">Password</label>
               <div style="position:relative;">
-                <input type="password" id="login-password" class="form-control" placeholder="Masukkan password (min. 6 karakter)" required autocomplete="current-password" style="padding-right:3rem;">
+                <input type="password" id="login-password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password" style="padding-right:3rem;">
                 <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);">👁️</button>
               </div>
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
-              <span id="login-btn-text">Masuk sebagai Peserta Didik</span>
+              <span id="login-btn-text">${l.btn}</span>
             </button>
-            <div id="auth-mode-toggle" style="text-align:center;margin-top:0.875rem;font-size:0.8125rem;">
-              <span id="auth-mode-question" style="color:var(--tertiary);">Belum memiliki akun?</span>
-              <a href="javascript:void(0)" id="auth-mode-link" onclick="toggleAuthMode()" style="color:var(--primary);font-weight:600;margin-left:0.25rem;text-decoration:none;">Daftar Akun Baru</a>
-            </div>
             <p id="login-hint-text" style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
-              Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.
+              ${l.hint}
             </p>
           </form>
+
+          <!-- Kembali & Daftar -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;font-size:0.8125rem;">
+            <a href="javascript:void(0)" onclick="goToWelcomeScreen()" style="color:var(--tertiary);text-decoration:none;display:flex;align-items:center;gap:0.25rem;">
+              ← Kembali
+            </a>
+            <span style="color:var(--tertiary);">
+              Belum punya akun?
+              <a href="javascript:void(0)" onclick="goToRegisterScreen()" style="color:var(--primary);font-weight:600;text-decoration:none;">Daftar di sini</a>
+            </span>
+          </div>
 
         </div>
       </div>
     `;
-    loginEl.style.display = 'flex';
   }
+
+  function renderRegisterFormScreen(loginEl) {
+    let target = AppState.activeLoginTab || 'student';
+    if (target === 'admin') target = 'student';
+    const labels = {
+      student: { title: 'Daftar Akun Peserta Didik', btn: 'Daftar Akun Peserta Didik', google: 'Daftar dengan Google (Siswa)', placeholder: 'contoh: siswa@institusi.ac.id' },
+      educator: { title: 'Daftar Akun Tutor', btn: 'Daftar Akun Tutor', google: 'Daftar dengan Google (Tutor)', placeholder: 'contoh: tutor@institusi.ac.id' }
+    };
+    const l = labels[target];
+
+    loginEl.innerHTML = `
+      <div class="login-page">
+        <div class="login-card">
+          <div class="login-brand">
+            <div class="brand-logo">C</div>
+            <div>
+              <h1 class="brand-title">Buat Akun Baru</h1>
+              <p class="brand-subtitle">Bergabung dengan CourseHub LMS</p>
+            </div>
+          </div>
+
+          <!-- Tab Switcher Role (Peserta Didik & Tutor) -->
+          <div class="auth-tabs">
+            <button type="button" class="auth-tab-btn ${target === 'student' ? 'active' : ''}" onclick="switchRegisterRole('student')">
+              Peserta Didik
+            </button>
+            <button type="button" class="auth-tab-btn ${target === 'educator' ? 'active' : ''}" onclick="switchRegisterRole('educator')">
+              Tutor
+            </button>
+          </div>
+
+          <div id="login-error" class="login-error" style="display:none;"></div>
+          <div id="login-success" class="login-success" style="display:none;"></div>
+
+          <!-- Google OAuth Daftar -->
+          <button type="button" class="btn-google-login" id="login-google-btn" onclick="handleGoogleLogin()">
+            <svg class="google-icon" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span id="login-google-text">${l.google}</span>
+          </button>
+
+          <div class="login-divider">
+            <span>atau daftar manual dengan email</span>
+          </div>
+
+          <!-- FORM REGISTER -->
+          <form id="form-login" onsubmit="handleAuthSubmit(event)">
+            <div class="form-group">
+              <label class="form-label">Nama Lengkap <span style="color:var(--error);">*</span></label>
+              <input type="text" id="register-name" class="form-control" placeholder="contoh: Muhammad Farhan" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email <span style="color:var(--error);">*</span></label>
+              <input type="email" id="login-email" class="form-control" placeholder="${l.placeholder}" required autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password <span style="color:var(--error);">*</span></label>
+              <div style="position:relative;">
+                <input type="password" id="login-password" class="form-control" placeholder="Minimal 6 karakter" required autocomplete="new-password" style="padding-right:3rem;" minlength="6">
+                <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);">👁️</button>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
+              <span id="login-btn-text">${l.btn}</span>
+            </button>
+          </form>
+
+          <!-- Kembali & Masuk -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;font-size:0.8125rem;">
+            <a href="javascript:void(0)" onclick="goToWelcomeScreen()" style="color:var(--tertiary);text-decoration:none;display:flex;align-items:center;gap:0.25rem;">
+              ← Kembali
+            </a>
+            <span style="color:var(--tertiary);">
+              Sudah punya akun?
+              <a href="javascript:void(0)" onclick="goToLoginScreen()" style="color:var(--primary);font-weight:600;text-decoration:none;">Masuk di sini</a>
+            </span>
+          </div>
+
+        </div>
+      </div>
+    `;
+  }
+
+  function goToWelcomeScreen() {
+    AppState.loginScreen = 'welcome';
+    AppState.authMode = 'login';
+    renderLoginScreen();
+  }
+  window.goToWelcomeScreen = goToWelcomeScreen;
+
+  function goToLoginScreen() {
+    AppState.loginScreen = 'login';
+    AppState.authMode = 'login';
+    renderLoginScreen();
+  }
+  window.goToLoginScreen = goToLoginScreen;
+
+  function goToRegisterScreen() {
+    AppState.loginScreen = 'register';
+    AppState.authMode = 'register';
+    if (AppState.activeLoginTab === 'admin') {
+      AppState.activeLoginTab = 'student';
+    }
+    renderLoginScreen();
+  }
+  window.goToRegisterScreen = goToRegisterScreen;
+
+  function handleGoogleLoginWelcome() {
+    AppState.activeLoginTab = 'student';
+    handleGoogleLogin();
+  }
+  window.handleGoogleLoginWelcome = handleGoogleLoginWelcome;
+
+  function switchRegisterRole(role) {
+    let target = 'student';
+    if (role === 'tutor' || role === 'educator') target = 'educator';
+    AppState.activeLoginTab = target;
+    AppState.loginScreen = 'register';
+    AppState.authMode = 'register';
+    renderLoginScreen();
+  }
+  window.switchRegisterRole = switchRegisterRole;
 
   function toggleAuthMode() {
-    AppState.authMode = (AppState.authMode === 'register') ? 'login' : 'register';
-    const isRegister = AppState.authMode === 'register';
-    const nameGroup = document.getElementById('register-name-group');
-    const nameInput = document.getElementById('register-name');
-    const question = document.getElementById('auth-mode-question');
-    const link = document.getElementById('auth-mode-link');
-    const btnText = document.getElementById('login-btn-text');
-    const target = AppState.activeLoginTab || 'student';
-
-    if (nameGroup) nameGroup.style.display = isRegister ? 'block' : 'none';
-    if (nameInput) nameInput.required = isRegister;
-
-    if (isRegister) {
-      if (question) question.textContent = 'Sudah memiliki akun?';
-      if (link) link.textContent = 'Masuk di sini';
-      if (btnText) {
-        if (target === 'student') btnText.textContent = 'Daftar Akun Peserta Didik';
-        else if (target === 'educator') btnText.textContent = 'Daftar Akun Tutor';
-        else btnText.textContent = 'Daftar Akun Administrator';
-      }
+    if (AppState.loginScreen === 'register' || AppState.authMode === 'register') {
+      goToLoginScreen();
     } else {
-      if (question) question.textContent = 'Belum memiliki akun?';
-      if (link) link.textContent = 'Daftar Akun Baru';
-      if (btnText) {
-        if (target === 'student') btnText.textContent = 'Masuk sebagai Peserta Didik';
-        else if (target === 'educator') btnText.textContent = 'Masuk sebagai Tutor';
-        else btnText.textContent = 'Masuk sebagai Administrator';
-      }
+      goToRegisterScreen();
     }
   }
+  window.toggleAuthMode = toggleAuthMode;
 
   function switchLoginRole(role) {
     let target = 'student';
@@ -232,50 +421,8 @@
 
     AppState.activeLoginTab = target;
     AppState.authMode = 'login';
-
-    const tabPeserta = document.getElementById('tab-btn-peserta');
-    const tabTutor = document.getElementById('tab-btn-tutor');
-    const tabAdmin = document.getElementById('tab-btn-admin');
-    const errEl = document.getElementById('login-error');
-    const succEl = document.getElementById('login-success');
-    const emailLabel = document.getElementById('login-email-label');
-    const emailInput = document.getElementById('login-email');
-    const btnText = document.getElementById('login-btn-text');
-    const hintText = document.getElementById('login-hint-text');
-    const googleBtnText = document.getElementById('login-google-text');
-    const nameGroup = document.getElementById('register-name-group');
-    const question = document.getElementById('auth-mode-question');
-    const link = document.getElementById('auth-mode-link');
-
-    if (nameGroup) nameGroup.style.display = 'none';
-    if (question) question.textContent = 'Belum memiliki akun?';
-    if (link) link.textContent = 'Daftar Akun Baru';
-    if (errEl) errEl.style.display = 'none';
-    if (succEl) succEl.style.display = 'none';
-
-    if (tabPeserta) tabPeserta.classList.toggle('active', target === 'student');
-    if (tabTutor) tabTutor.classList.toggle('active', target === 'educator');
-    if (tabAdmin) tabAdmin.classList.toggle('active', target === 'admin');
-
-    if (target === 'student') {
-      if (emailLabel) emailLabel.textContent = 'Email Peserta Didik';
-      if (emailInput) emailInput.placeholder = 'contoh: siswa@institusi.ac.id';
-      if (btnText) btnText.textContent = 'Masuk sebagai Peserta Didik';
-      if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Siswa dengan Google';
-      if (hintText) hintText.textContent = 'Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.';
-    } else if (target === 'educator') {
-      if (emailLabel) emailLabel.textContent = 'Email Tutor Pengampu';
-      if (emailInput) emailInput.placeholder = 'contoh: tutor@institusi.ac.id';
-      if (btnText) btnText.textContent = 'Masuk sebagai Tutor';
-      if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Tutor dengan Google';
-      if (hintText) hintText.textContent = 'Portal khusus Tutor Pengampu. Masuk untuk mengelola materi, jadwal Zoom, dan verifikasi kelulusan tema.';
-    } else if (target === 'admin') {
-      if (emailLabel) emailLabel.textContent = 'Email Administrator';
-      if (emailInput) emailInput.placeholder = 'contoh: admin@institusi.ac.id';
-      if (btnText) btnText.textContent = 'Masuk sebagai Administrator';
-      if (googleBtnText) googleBtnText.textContent = 'Masuk sebagai Admin dengan Google';
-      if (hintText) hintText.textContent = 'Portal Administrator Pusat Institusi. Akses pengaturan sistem, data pengguna, dan seluruh kurikulum.';
-    }
+    AppState.loginScreen = 'login';
+    renderLoginScreen();
   }
 
   async function handleGoogleLogin() {
@@ -285,7 +432,7 @@
       return;
     }
 
-    const googleBtn = document.getElementById('login-google-btn');
+    const googleBtn = document.getElementById('login-google-btn') || document.getElementById('login-google-btn-welcome');
     const originalContent = googleBtn ? googleBtn.innerHTML : '';
     if (googleBtn) {
       googleBtn.disabled = true;
@@ -299,6 +446,7 @@
     const currentTab = AppState.activeLoginTab || 'student';
     try {
       localStorage.setItem('coursehub_login_role_intent', currentTab);
+      localStorage.setItem('coursehub_login_mode_intent', AppState.authMode || 'login');
     } catch (e) {
       console.warn('localStorage error:', e);
     }
@@ -339,7 +487,8 @@
     const btn = document.getElementById('login-submit-btn');
     const btnText = document.getElementById('login-btn-text');
     const originalText = btnText ? btnText.textContent : 'Daftar';
-    const targetRole = AppState.activeLoginTab || 'student';
+    let targetRole = AppState.activeLoginTab || 'student';
+    if (targetRole === 'admin') targetRole = 'student';
 
     if (!name) {
       showLoginError('Mohon isi nama lengkap Anda.');
@@ -394,12 +543,18 @@
       if (authData?.session) {
         await handleSessionStart(authData.session.user);
       } else {
-        const succEl = document.getElementById('login-success');
-        if (succEl) {
-          succEl.textContent = '🎉 Pendaftaran berhasil! Silakan masuk dengan email dan password Anda.';
-          succEl.style.display = 'block';
-        }
-        toggleAuthMode();
+        // Pendaftaran berhasil, arahkan ke layar login
+        AppState.loginScreen = 'login';
+        AppState.authMode = 'login';
+        renderLoginScreen();
+        // Tampilkan pesan sukses setelah re-render
+        setTimeout(() => {
+          const succEl = document.getElementById('login-success');
+          if (succEl) {
+            succEl.textContent = '🎉 Pendaftaran berhasil! Silakan masuk dengan email dan password Anda.';
+            succEl.style.display = 'block';
+          }
+        }, 50);
       }
     } catch (err) {
       showLoginError('Pendaftaran gagal: ' + (err.message || 'Periksa kembali data Anda.'));
@@ -553,9 +708,40 @@
             return;
           }
         } else if (isGoogleUser && activeTab === 'educator') {
-          showLoginError(`⛔ Akses Ditolak: Akun Google (${authUser.email}) belum terdaftar sebagai Tutor Pengampu. Silakan hubungi admin institusi.`);
-          await getSupabase().auth.signOut();
-          return;
+          const savedMode = localStorage.getItem('coursehub_login_mode_intent');
+          if (savedMode === 'register') {
+            // Pengguna mendaftar sebagai Tutor baru lewat Google
+            const fullName = authUser.user_metadata?.full_name || 
+                             authUser.user_metadata?.name || 
+                             authUser.email.split('@')[0];
+            const newEducatorProfile = {
+              auth_user_id: authUser.id,
+              name: fullName,
+              email: authUser.email,
+              role: 'educator',
+              subject: 'Bahasa Arab',
+              class_name: 'Guru Pengampu',
+              status: 'Aktif'
+            };
+            const { data: createdEducator, error: createEducatorErr } = await sb
+              .from('profiles')
+              .insert([newEducatorProfile])
+              .select()
+              .single();
+
+            if (!createEducatorErr && createdEducator) {
+              AppState.user = createdEducator;
+            } else {
+              console.error('Gagal membuat profil Tutor via Google:', createEducatorErr);
+              showLoginError('Gagal mendaftarkan akun Tutor via Google. Hubungi administrator.');
+              await getSupabase().auth.signOut();
+              return;
+            }
+          } else {
+            showLoginError(`⛔ Akses Ditolak: Akun Google (${authUser.email}) belum terdaftar sebagai Tutor Pengampu. Silakan daftar akun baru terlebih dahulu atau hubungi admin.`);
+            await getSupabase().auth.signOut();
+            return;
+          }
         } else {
           showLoginError('Profil pengguna tidak ditemukan di database. Hubungi administrator.');
           await getSupabase().auth.signOut();
@@ -622,6 +808,7 @@
     if (loginEl) loginEl.style.display = 'none';
     document.getElementById('app-root').style.display = 'flex';
     localStorage.removeItem('coursehub_login_role_intent');
+    localStorage.removeItem('coursehub_login_mode_intent');
     // Bersihkan hash token dari address bar agar rapi & aman
     if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('error='))) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -630,15 +817,22 @@
 
   function showLoginError(msg) {
     localStorage.removeItem('coursehub_login_role_intent');
+    localStorage.removeItem('coursehub_login_mode_intent');
     const el = document.getElementById('login-error');
     if (el) { el.textContent = msg; el.style.display = 'block'; }
     const btn = document.getElementById('login-submit-btn');
     if (btn) {
       btn.disabled = false;
       const target = AppState.activeLoginTab || 'student';
-      if (target === 'student') btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Peserta Didik</span>';
-      else if (target === 'educator') btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Tutor</span>';
-      else btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Administrator</span>';
+      const isRegister = AppState.authMode === 'register';
+      if (isRegister) {
+        if (target === 'educator') btn.innerHTML = '<span id="login-btn-text">Daftar Akun Tutor</span>';
+        else btn.innerHTML = '<span id="login-btn-text">Daftar Akun Peserta Didik</span>';
+      } else {
+        if (target === 'student') btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Peserta Didik</span>';
+        else if (target === 'educator') btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Tutor</span>';
+        else btn.innerHTML = '<span id="login-btn-text">Masuk sebagai Administrator</span>';
+      }
     }
   }
 
