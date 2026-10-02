@@ -7,6 +7,9 @@
   <title>CourseHub - Platform Manajemen Pembelajaran & Media Interaktif</title>
   <meta name="description"
     content="CourseHub - Sistem manajemen pembelajaran modern berbasis Supabase untuk Interactive Flat Panel dan pembelajaran mandiri.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="alternate icon" href="favicon.svg">
+  <link rel="apple-touch-icon" href="favicon.svg">
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Courier+Prime&display=swap');
@@ -182,17 +185,28 @@
     }
 
     .brand-logo {
-      width: 36px;
-      height: 36px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      width: 38px;
+      height: 38px;
       border-radius: var(--radius-md);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #ffffff;
-      font-weight: 700;
-      font-size: 1.125rem;
-      box-shadow: 0 2px 6px rgba(20, 184, 166, 0.3);
+      flex-shrink: 0;
+    }
+
+    .brand-logo-img {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-md);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22);
+      flex-shrink: 0;
+      display: block;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .brand-logo-img:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 16px rgba(13, 148, 136, 0.35);
     }
 
     .brand-text {
@@ -3310,34 +3324,6 @@
       user-select: none;
     }
 
-    /* Focus Mode Toggle Button */
-    .btn-focus-toggle {
-      background: var(--surface-container-low);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 0.35rem 0.65rem;
-      color: var(--primary);
-      font-size: 0.875rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      transition: var(--transition);
-      font-weight: 500;
-    }
-    .btn-focus-toggle:hover {
-      background: #ffffff;
-      border-color: var(--secondary);
-      color: var(--secondary-hover);
-    }
-    #app-root.focus-mode-active .sidebar {
-      transform: translateX(-100%);
-    }
-    #app-root.focus-mode-active .main-wrapper {
-      margin-left: 0 !important;
-      width: 100% !important;
-    }
-
     /* Pulsing Status Dot on User Role */
     .pulse-dot {
       position: relative;
@@ -3550,38 +3536,102 @@
     }
 
     /* =====================================================
-     * 5. ARABIC TYPOGRAPHY TOOLBAR & FOCUS LEARNING
+     * 5. ARABIC TYPOGRAPHY TOOLBAR & DYNAMIC SCALING (80% - 180%)
      * ===================================================== */
     .arabic-font-toolbar {
       display: inline-flex;
       align-items: center;
-      gap: 0.25rem;
-      background: var(--surface-container);
-      padding: 0.2rem 0.35rem;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
+      gap: 0.35rem;
+      background: #f1f5f9;
+      padding: 0.2rem 0.45rem;
+      border-radius: var(--radius-md);
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     .btn-tool-mini {
-      border: none;
-      background: transparent;
-      padding: 0.2rem 0.45rem;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      padding: 0.25rem 0.55rem;
       border-radius: 4px;
-      font-size: 0.75rem;
+      font-size: 0.775rem;
       font-weight: 700;
       color: var(--primary);
       cursor: pointer;
-      transition: var(--transition);
-      line-height: 1;
+      transition: all 0.15s ease;
+      line-height: 1.2;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
     }
     .btn-tool-mini:hover {
-      background: #ffffff;
-      box-shadow: var(--shadow-1);
+      background: #f8fafc;
+      border-color: var(--secondary);
+      color: var(--secondary-hover);
     }
-    .arabic-font-amiri {
-      font-family: 'Amiri', serif !important;
+    .btn-tool-mini:active {
+      transform: scale(0.96);
     }
-    .arabic-font-naskh {
-      font-family: 'Noto Naskh Arabic', sans-serif !important;
+    .arabic-font-size-badge {
+      font-size: 0.775rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      padding: 0 0.25rem;
+      min-width: 44px;
+      text-align: center;
+      user-select: none;
+    }
+
+    /* Dynamic text scaling engine across reading body, exams, and quotes */
+    .player-content-body {
+      --content-scale: 1;
+      transition: font-size 0.15s ease;
+    }
+    .player-content-body .reading-content-area,
+    .player-content-body .reading-content-area p,
+    .player-content-body .reading-content-area li,
+    .player-content-body .reading-content-area div,
+    .player-content-body .reading-content-area span,
+    .player-content-body .reading-content-area blockquote,
+    .player-content-body .exam-question-item,
+    .player-content-body .exam-question-text,
+    .player-content-body .exam-option-card span {
+      font-size: calc(1.08rem * var(--content-scale, 1)) !important;
+      line-height: 1.9;
+    }
+
+    /* Amiri Quran Font */
+    .arabic-font-amiri,
+    .arabic-font-amiri .reading-content-area,
+    .arabic-font-amiri .reading-content-area *,
+    .arabic-font-amiri [dir="rtl"],
+    .arabic-font-amiri [dir="auto"],
+    .arabic-font-amiri .exam-question-item,
+    .arabic-font-amiri .exam-question-text,
+    .arabic-font-amiri .exam-option-card span {
+      font-family: 'Amiri', 'Traditional Arabic', serif !important;
+    }
+
+    /* Traditional Naskh Font */
+    .arabic-font-naskh,
+    .arabic-font-naskh .reading-content-area,
+    .arabic-font-naskh .reading-content-area *,
+    .arabic-font-naskh [dir="rtl"],
+    .arabic-font-naskh [dir="auto"],
+    .arabic-font-naskh .exam-question-item,
+    .arabic-font-naskh .exam-question-text,
+    .arabic-font-naskh .exam-option-card span {
+      font-family: 'Noto Naskh Arabic', 'Scheherazade New', 'Tahoma', sans-serif !important;
+    }
+
+    /* Keep system UI elements intact from arabic font overrides */
+    .player-content-body button,
+    .player-content-body .btn,
+    .player-content-body .badge,
+    .player-content-body .arabic-font-toolbar,
+    .player-content-body .exam-countdown-bar,
+    .player-content-body .study-timer-badge {
+      font-family: var(--font-base) !important;
     }
 
     /* =====================================================
@@ -3696,7 +3746,7 @@
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="brand-logo">C</div>
+        <img src="favicon.svg" alt="CourseHub Logo" class="brand-logo-img">
         <div class="brand-text">
           <span class="brand-title">CourseHub</span>
           <span class="brand-subtitle">LMS Interaktif</span>
@@ -3750,12 +3800,6 @@
             <input type="text" id="global-search-input" placeholder="Cari materi..." oninput="handleGlobalSearch(this.value)">
             <span class="search-kbd-badge">Ctrl K</span>
           </div>
-
-          <!-- Focus Mode Toggle (Distraction Free / Fullscreen reading) -->
-          <button class="btn-focus-toggle" id="btn-focus-toggle" onclick="toggleFocusMode()" title="Mode Fokus Membaca (Sembunyikan Sidebar)">
-            <span id="focus-toggle-icon">⛶</span>
-            <span id="focus-toggle-text" style="font-size:0.775rem;">Fokus</span>
-          </button>
 
           <!-- Tombol Pintas Persetujuan Tugas (Educator & Admin) -->
           <button class="btn btn-sm" id="topbar-approval-btn" onclick="navigateTo('tutor-approvals')" title="Buka Pusat Persetujuan Tugas Peserta" style="display:none;align-items:center;gap:0.4rem;background:#4338ca;color:#ffffff;border:1px solid #4338ca;font-weight:600;padding:0.35rem 0.75rem;">

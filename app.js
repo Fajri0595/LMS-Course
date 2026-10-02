@@ -37,6 +37,17 @@
     unitStudyElapsed: {},     // { [unitId]: seconds }
     unitVideoElapsed: {},     // { [unitId]: seconds }
     forceTestAntiSkip: {},    // { [unitId]: boolean }
+    arabicFontSize: (() => {
+      try {
+        const val = localStorage.getItem('lms_arabic_font_size');
+        return val ? parseInt(val, 10) : 100;
+      } catch (e) { return 100; }
+    })(),
+    arabicFontFamily: (() => {
+      try {
+        return localStorage.getItem('lms_arabic_font_family') || 'amiri';
+      } catch (e) { return 'amiri'; }
+    })(),
     isDemoMode: false
   };
 
@@ -197,7 +208,7 @@
       <div class="login-showcase-panel">
         <div>
           <div class="showcase-header">
-            <div class="brand-logo">C</div>
+            <img src="favicon.svg" alt="CourseHub Logo" class="brand-logo-img" style="width:48px;height:48px;box-shadow:0 8px 24px rgba(0,0,0,0.35);">
             <div>
               <h2>CourseHub LMS</h2>
               <p>Platform Akademik Interaktif</p>
@@ -4558,7 +4569,7 @@
                 Browser Anda tidak mendukung tag video HTML5.
               </video>
             </div>
-            ${currentUnit.contentBody ? `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody}</div>` : ''}
+            ${currentUnit.contentBody ? `<div class="reading-content-area" style="line-height:1.9;" dir="auto">${currentUnit.contentBody}</div>` : ''}
           `;
         } else if (isYoutube) {
           const ytMatch = currentUnit.embedUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
@@ -4573,11 +4584,11 @@
             <div class="video-player-container" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin-bottom:1.5rem;background:#000;">
               <iframe id="lms-youtube-iframe" src="${embedSrc}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
             </div>
-            ${currentUnit.contentBody ? `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody}</div>` : ''}
+            ${currentUnit.contentBody ? `<div class="reading-content-area" style="line-height:1.9;" dir="auto">${currentUnit.contentBody}</div>` : ''}
           `;
         }
       } else {
-        contentHtml = `<div style="line-height:1.9;font-size:1.05rem;" dir="auto">${currentUnit.contentBody || '<p style="color:var(--tertiary);">Konten belum tersedia.</p>'}</div>`;
+        contentHtml = `<div class="reading-content-area" style="line-height:1.9;" dir="auto">${currentUnit.contentBody || '<p style="color:var(--tertiary);">Konten belum tersedia.</p>'}</div>`;
       }
     }
 
@@ -4701,10 +4712,14 @@
             </div>
             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
               <!-- Arabic Font Customization Toolbar -->
-              <div class="arabic-font-toolbar" title="Pengaturan Ukuran & Gaya Font Teks Arab">
-                <button type="button" onclick="adjustArabicFontSize(-10)" title="Kecilkan Font (A-)">A-</button>
-                <button type="button" onclick="adjustArabicFontSize(10)" title="Besarkan Font (A+)">A+</button>
-                <button type="button" onclick="toggleArabicFontFamily()" id="arabic-font-toggle-btn" style="min-width:44px;" title="Ganti Font Teks Arab (Amiri / Naskh)">ع Font</button>
+              <div class="arabic-font-toolbar" title="Pengaturan Ukuran & Gaya Font Teks Arab / Latin (80% - 180%)">
+                <button type="button" class="btn-tool-mini" onclick="adjustArabicFontSize(-10)" title="Kecilkan Teks (A-)">A-</button>
+                <span class="arabic-font-size-badge" id="arabic-font-size-label" title="Ukuran teks aktif">${AppState.arabicFontSize || 100}%</span>
+                <button type="button" class="btn-tool-mini" onclick="adjustArabicFontSize(10)" title="Besarkan Teks (A+)">A+</button>
+                <span style="color:#cbd5e1;padding:0 2px;">|</span>
+                <button type="button" class="btn-tool-mini" onclick="toggleArabicFontFamily()" id="arabic-font-toggle-btn" title="Beralih font tulisan Arab (Amiri Quran / Traditional Naskh)">
+                  ع ${AppState.arabicFontFamily === 'naskh' ? 'Traditional Naskh' : 'Amiri Quran'}
+                </button>
               </div>
               ${simulationToggleHtml}
               <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Mode Layar Penuh (Fullscreen)">
@@ -4713,7 +4728,7 @@
             </div>
           </div>
 
-          <div class="player-content-body ${AppState.arabicFontFamily === 'naskh' ? 'arabic-font-naskh' : 'arabic-font-amiri'}" id="player-body" dir="auto" style="font-size:${AppState.arabicFontSize || 100}%;">
+          <div class="player-content-body ${AppState.arabicFontFamily === 'naskh' ? 'arabic-font-naskh' : 'arabic-font-amiri'}" id="player-body" dir="auto" style="--content-scale:${(AppState.arabicFontSize || 100) / 100}; font-size:${AppState.arabicFontSize || 100}%;">
             ${contentHtml}
           </div>
 
@@ -8555,33 +8570,7 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     }, 3250);
   }
 
-  // --- UI/UX Helpers: Focus Mode, Global Search & Arabic Typography ---
-  function toggleFocusMode() {
-    const root = document.getElementById('app-root');
-    const btn = document.getElementById('btn-focus-toggle');
-    if (!root) return;
-
-    AppState.isFocusMode = !AppState.isFocusMode;
-    if (AppState.isFocusMode) {
-      root.classList.add('focus-mode-active');
-      if (btn) {
-        btn.innerHTML = '✨ Keluar Fokus';
-        btn.classList.add('active');
-        btn.title = 'Nonaktifkan Mode Fokus Belajar';
-      }
-      showToast('🎯 Mode Fokus diaktifkan. Sidebar disembunyikan untuk kenyamanan belajar.', 'info');
-    } else {
-      root.classList.remove('focus-mode-active');
-      if (btn) {
-        btn.innerHTML = '🎯 Mode Fokus';
-        btn.classList.remove('active');
-        btn.title = 'Aktifkan Mode Fokus Belajar';
-      }
-      showToast('✨ Mode Fokus dinonaktifkan.', 'info');
-    }
-  }
-  window.toggleFocusMode = toggleFocusMode;
-
+  // --- UI/UX Helpers: Global Search & Arabic Typography Engine ---
   function handleGlobalSearch(query) {
     if (!query) {
       const cards = document.querySelectorAll('.card-course-elevated, .stat-card-elevated');
@@ -8617,16 +8606,26 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
     if (!AppState.arabicFontSize) AppState.arabicFontSize = 100;
     AppState.arabicFontSize = Math.min(180, Math.max(80, AppState.arabicFontSize + delta));
     const playerBody = document.getElementById('player-body');
+    const scale = AppState.arabicFontSize / 100;
     if (playerBody) {
+      playerBody.style.setProperty('--content-scale', scale);
       playerBody.style.fontSize = `${AppState.arabicFontSize}%`;
-      showToast(`🔍 Ukuran font diatur ke ${AppState.arabicFontSize}%`, 'info');
     }
+    const label = document.getElementById('arabic-font-size-label');
+    if (label) {
+      label.textContent = `${AppState.arabicFontSize}%`;
+    }
+    showToast(`🔍 Ukuran font teks: ${AppState.arabicFontSize}%`, 'info');
+    try {
+      localStorage.setItem('lms_arabic_font_size', String(AppState.arabicFontSize));
+    } catch (e) {}
   }
   window.adjustArabicFontSize = adjustArabicFontSize;
 
   function toggleArabicFontFamily() {
     AppState.arabicFontFamily = AppState.arabicFontFamily === 'naskh' ? 'amiri' : 'naskh';
     const playerBody = document.getElementById('player-body');
+    const toggleBtn = document.getElementById('arabic-font-toggle-btn');
     if (playerBody) {
       if (AppState.arabicFontFamily === 'naskh') {
         playerBody.classList.remove('arabic-font-amiri');
@@ -8636,8 +8635,14 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
         playerBody.classList.add('arabic-font-amiri');
       }
     }
-    const fontName = AppState.arabicFontFamily === 'naskh' ? 'Traditional Naskh' : 'Amiri Quran';
-    showToast(`🔤 Font tulisan berganti: ${fontName}`, 'info');
+    const fontLabel = AppState.arabicFontFamily === 'naskh' ? 'Traditional Naskh' : 'Amiri Quran';
+    if (toggleBtn) {
+      toggleBtn.innerHTML = `ع ${fontLabel}`;
+    }
+    showToast(`🔤 Font tulisan berganti: ${fontLabel}`, 'info');
+    try {
+      localStorage.setItem('lms_arabic_font_family', AppState.arabicFontFamily);
+    } catch (e) {}
   }
   window.toggleArabicFontFamily = toggleArabicFontFamily;
 
