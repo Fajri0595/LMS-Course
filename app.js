@@ -1083,6 +1083,17 @@
       badge.textContent = pendingCount;
       badge.className = `nav-badge-count ${pendingCount > 0 ? '' : 'zero'}`;
     }
+
+    const topbarBtn = document.getElementById('topbar-approval-btn');
+    const topbarBadge = document.getElementById('topbar-approval-badge');
+    if (topbarBtn) {
+      const isTutorOrAdmin = AppState.currentRole === 'educator' || AppState.currentRole === 'admin';
+      topbarBtn.style.display = isTutorOrAdmin ? 'inline-flex' : 'none';
+      if (topbarBadge) {
+        topbarBadge.textContent = pendingCount;
+        topbarBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+      }
+    }
   }
 
   function cleanPhoneNumber(phone) {
@@ -2001,9 +2012,10 @@
 
     const totalUnits = AppState.courses.reduce((s, c) => s + c.contents.length, 0);
     const totalStudents = AppState.students.length;
+    const pendingApprovalsCount = (AppState.submissions || []).filter(s => s.approval_status === 'pending').length;
 
     container.innerHTML = `
-      <div class="grid-stats">
+      <div class="grid-stats" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
         <div class="stat-card">
           <div class="stat-icon" style="background:#dbeafe;color:#1d4ed8;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
@@ -2031,7 +2043,31 @@
             <div class="stat-label">Total Unit Materi</div>
           </div>
         </div>
+        <div class="stat-card" onclick="navigateTo('tutor-approvals')" style="cursor:pointer;border:${pendingApprovalsCount > 0 ? '2px solid #818cf8;background:#f5f3ff;' : '1px solid var(--border);'}" title="Klik untuk membuka Pusat Persetujuan Tugas">
+          <div class="stat-icon" style="background:#ede9fe;color:#4f46e5;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          </div>
+          <div>
+            <div class="stat-value" style="${pendingApprovalsCount > 0 ? 'color:#4f46e5;font-weight:800;' : ''}">${pendingApprovalsCount}</div>
+            <div class="stat-label" style="font-weight:600;color:${pendingApprovalsCount > 0 ? '#4338ca' : 'inherit'};">Tugas Perlu Persetujuan ↗</div>
+          </div>
+        </div>
       </div>
+
+      ${pendingApprovalsCount > 0 ? `
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:1.15rem 1.35rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+          <div style="display:flex;align-items:center;gap:0.75rem;">
+            <span style="font-size:1.75rem;">📝</span>
+            <div>
+              <strong style="color:#1e40af;font-size:1rem;display:block;">Ada ${pendingApprovalsCount} pengajuan tugas peserta didik menunggu persetujuan Anda!</strong>
+              <span style="font-size:0.8125rem;color:#3b82f6;">Setujui tugas Drive atau jadwal Zoom siswa agar bab materi berikutnya dapat diakses.</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="navigateTo('tutor-approvals')" style="font-weight:700;padding:0.45rem 1rem;">
+            ⚡ Buka Persetujuan Tugas (${pendingApprovalsCount}) →
+          </button>
+        </div>
+      ` : ''}
 
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
         <div>
@@ -3981,9 +4017,23 @@
         }
       });
 
-      // ANTI-SKIP SEGERA SAAT USER MENCOBA GESER SCRUBBER
+      // BLOKIR LOMPAT WAKTU / FORWARD VIA KEYBOARD (ArrowRight, ArrowUp, 'L', PageUp)
+      const blockKeyboardSeek = (e) => {
+        const forwardKeys = ['ArrowRight', 'ArrowUp', 'PageUp', 'KeyL', 'l', 'L'];
+        if (forwardKeys.includes(e.key) || forwardKeys.includes(e.code)) {
+          if (videoEl.currentTime >= maxWatchedTime - 0.2) {
+            e.preventDefault();
+            e.stopPropagation();
+            videoEl.currentTime = maxWatchedTime;
+            showToast('🔒 Navigasi keyboard dinonaktifkan: Anda tidak dapat melompati video yang belum ditonton.', 'warning');
+          }
+        }
+      };
+      videoEl.addEventListener('keydown', blockKeyboardSeek);
+
+      // ANTI-SKIP SEGERA SAAT USER MENCOBA GESER SCRUBBER ATAU SEEK KEYBOARD
       videoEl.addEventListener('seeking', () => {
-        if (videoEl.currentTime > maxWatchedTime + 0.8) {
+        if (videoEl.currentTime > maxWatchedTime + 0.3) {
           videoEl.currentTime = maxWatchedTime;
           showToast('🔒 Anti-Skip Aktif: Anda tidak dapat melompati video yang belum ditonton.', 'warning');
         }
@@ -3991,7 +4041,7 @@
 
       videoEl.addEventListener('timeupdate', () => {
         // ANTI-SKIP: Jika melompati ke waktu yang belum pernah ditonton
-        if (videoEl.currentTime > maxWatchedTime + 1.2) {
+        if (videoEl.currentTime > maxWatchedTime + 0.6) {
           videoEl.currentTime = maxWatchedTime;
           showToast('🔒 Anti-Skip Aktif: Anda tidak dapat melompati video yang belum ditonton.', 'warning');
         } else if (videoEl.currentTime > maxWatchedTime) {
