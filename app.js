@@ -3648,8 +3648,10 @@
               ${chStatusIcon}
             </div>
             <div class="player-chapter-title" style="flex:1;min-width:0;">${escHtml(chTitle)}</div>
-            <span class="chapter-duration-badge" title="Total estimasi waktu menyelesaikan tema ini">⏱️ ~${totalChapterMin}m</span>
-            <div class="player-chapter-chevron" style="transform:${isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'};transition:transform 0.25s ease;">▼</div>
+            <div style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0;">
+              <span class="chapter-duration-badge" title="Total estimasi waktu menyelesaikan tema ini">⏱️ ~${totalChapterMin}m</span>
+              <div class="player-chapter-chevron" style="transform:${isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'};transition:transform 0.25s ease;">▼</div>
+            </div>
           </div>
           <div class="player-chapter-body">
             ${subItemsHtml}
@@ -4694,12 +4696,14 @@
         <!-- Area Konten & Layar Ujian -->
         <div class="player-content-area">
           <div class="player-content-header">
-            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-              <span class="badge badge-${(currentUnit.type || 'materi').toLowerCase()}">${currentUnit.type}</span>
-              <h2 style="font-size:1.2rem;margin:0;" dir="auto">${escHtml(currentUnit.title)}</h2>
-              ${timerWidgetHtml}
+            <div class="player-header-info">
+              <div class="player-header-top-row">
+                <span class="badge badge-${(currentUnit.type || 'materi').toLowerCase()}">${currentUnit.type}</span>
+                ${timerWidgetHtml}
+              </div>
+              <h2 class="player-unit-main-heading" dir="auto">${escHtml(currentUnit.title)}</h2>
             </div>
-            <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="player-header-actions">
               ${simulationToggleHtml}
               <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Mode Layar Penuh (Fullscreen)">
                 🖥️ Fullscreen

@@ -795,9 +795,10 @@
     /* Course Player UI */
     .player-container {
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: 360px 1fr;
       gap: 1.5rem;
-      height: calc(100vh - var(--header-height) - 3rem);
+      height: calc(100vh - var(--header-height) - 2.5rem);
+      min-height: 560px;
     }
 
     .player-sidebar {
@@ -981,11 +982,46 @@
     }
 
     .player-content-header {
-      padding: 1.25rem 1.5rem;
+      padding: 1.15rem 1.5rem;
       border-bottom: 1px solid var(--border);
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
+      gap: 1.25rem;
+      background: #ffffff;
+    }
+
+    .player-header-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .player-header-top-row {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+    }
+
+    .player-unit-main-heading {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      font-family: var(--font-heading);
+      line-height: 1.35;
+      margin: 0;
+      word-break: break-word;
+    }
+
+    .player-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+      padding-top: 0.15rem;
     }
 
     .player-content-body {
@@ -1075,7 +1111,7 @@
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      padding: 0.85rem 1rem;
+      padding: 0.95rem 1.15rem;
       background: #ffffff;
       border: 1.5px solid #e2e8f0;
       border-radius: 12px;
@@ -1099,15 +1135,18 @@
       background: #f8fafc;
     }
     .player-standalone-title {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: #1e293b;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.35;
       flex: 1;
+      min-width: 0;
+      word-break: break-word;
     }
     .player-standalone-subtext {
-      font-size: 0.75rem;
+      font-size: 0.775rem;
       color: #64748b;
-      margin-top: 0.125rem;
+      margin-top: 0.2rem;
     }
     .player-chapter-card {
       border: 1.5px solid #e2e8f0;
@@ -1126,7 +1165,7 @@
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      padding: 0.85rem 1rem;
+      padding: 0.95rem 1.15rem;
       cursor: pointer;
       background: #ffffff;
       user-select: none;
@@ -1141,15 +1180,29 @@
       border-bottom: 1px solid #f1f5f9;
     }
     .player-chapter-title {
-      font-size: 0.875rem;
+      font-size: 0.95rem;
       font-weight: 700;
-      color: #1e293b;
+      color: #0f172a;
+      line-height: 1.4;
       flex: 1;
+      min-width: 0;
+      word-break: break-word;
+    }
+    .chapter-duration-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #64748b;
+      background: #f1f5f9;
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .player-chapter-chevron {
       font-size: 0.75rem;
       color: var(--tertiary);
       transition: transform 0.25s ease;
+      flex-shrink: 0;
     }
     .player-chapter-card.expanded .player-chapter-chevron {
       transform: rotate(180deg);
@@ -1166,8 +1219,8 @@
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      padding: 0.8rem 1rem 0.8rem 1.35rem;
-      border-left: 3px solid transparent;
+      padding: 0.85rem 1.15rem 0.85rem 1.25rem;
+      border-left: 3.5px solid transparent;
       cursor: pointer;
       transition: all 0.15s ease;
       border-bottom: 1px solid #f1f5f9;
@@ -1189,19 +1242,20 @@
       cursor: not-allowed;
     }
     .player-subitem-title {
-      font-size: 0.8125rem;
-      font-weight: 500;
-      color: #334155;
-      line-height: 1.4;
+      font-size: 0.925rem;
+      font-weight: 600;
+      color: #1e293b;
+      line-height: 1.45;
+      word-break: break-word;
     }
     .player-subitem.active .player-subitem-title {
-      font-weight: 600;
+      font-weight: 700;
       color: #0f766e;
     }
     .player-subitem-meta {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      margin-top: 0.15rem;
+      font-size: 0.775rem;
+      color: #64748b;
+      margin-top: 0.2rem;
     }
 
     /* Quiz Player & Celebratory Result View (Persis Gambar 1) */
@@ -1842,8 +1896,76 @@
 
     body.ifp-mode .player-container {
       height: calc(100vh - 2rem) !important;
-      grid-template-columns: 280px 1fr !important;
-      gap: 1rem !important;
+      grid-template-columns: 400px 1fr !important;
+      gap: 1.5rem !important;
+    }
+
+    body.ifp-mode .player-sidebar-title {
+      font-size: 1.25rem !important;
+    }
+
+    body.ifp-mode .player-chapter-header {
+      padding: 1.15rem 1.35rem !important;
+    }
+
+    body.ifp-mode .player-chapter-title {
+      font-size: 1.15rem !important;
+      line-height: 1.4 !important;
+    }
+
+    body.ifp-mode .player-subitem {
+      padding: 1rem 1.25rem 1rem 1.35rem !important;
+    }
+
+    body.ifp-mode .player-subitem-title {
+      font-size: 1.05rem !important;
+      line-height: 1.45 !important;
+    }
+
+    body.ifp-mode .player-subitem-meta {
+      font-size: 0.875rem !important;
+    }
+
+    body.ifp-mode .player-standalone-card {
+      padding: 1.15rem 1.35rem !important;
+    }
+
+    body.ifp-mode .player-standalone-title {
+      font-size: 1.15rem !important;
+    }
+
+    body.ifp-mode .player-standalone-subtext {
+      font-size: 0.875rem !important;
+    }
+
+    body.ifp-mode .player-status-circle {
+      width: 28px !important;
+      height: 28px !important;
+      font-size: 0.85rem !important;
+    }
+
+    body.ifp-mode .chapter-duration-badge {
+      font-size: 0.875rem !important;
+      padding: 0.25rem 0.6rem !important;
+    }
+
+    body.ifp-mode .player-unit-main-heading {
+      font-size: 1.75rem !important;
+      line-height: 1.35 !important;
+    }
+
+    body.ifp-mode .player-header-top-row {
+      gap: 0.85rem !important;
+    }
+
+    body.ifp-mode .study-timer-badge {
+      font-size: 0.95rem !important;
+      padding: 0.45rem 1rem !important;
+    }
+
+    body.ifp-mode .study-timer-bar {
+      width: 80px !important;
+      height: 8px !important;
     }
 
     body.ifp-mode .player-content-body {
