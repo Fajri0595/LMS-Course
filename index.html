@@ -3221,9 +3221,472 @@
       margin-bottom: 0.25rem;
       color: #78350f;
     }
-    .theme-lock-desc {
+    /* =====================================================
+     * 1. GLOBAL MODERN SLEEK SCROLLBAR
+     * ===================================================== */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* =====================================================
+     * 2. TOPBAR & SHELL MODERNIZATION (Breadcrumbs, Quick Search, Focus)
+     * ===================================================== */
+    .topbar-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .breadcrumb-trail {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.725rem;
+      color: var(--tertiary);
+      font-weight: 500;
+    }
+    .bc-sep {
+      opacity: 0.5;
+    }
+    .bc-current {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* Quick Global Search Bar in Topbar */
+    .topbar-search-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface-container-low);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      padding: 0.35rem 0.85rem;
+      transition: var(--transition);
+    }
+    .topbar-search-box:focus-within {
+      background: #ffffff;
+      border-color: var(--secondary);
+      box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+    }
+    .topbar-search-box input {
+      border: none;
+      background: transparent;
+      outline: none;
+      font-size: 0.8125rem;
+      color: var(--on-surface);
+      width: 160px;
+      transition: width 0.3s ease;
+    }
+    .topbar-search-box:focus-within input {
+      width: 220px;
+    }
+    .search-icon {
+      color: var(--tertiary);
+      flex-shrink: 0;
+    }
+    .search-kbd-badge {
+      font-size: 0.65rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.05);
+      color: var(--tertiary);
+      font-weight: 600;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      user-select: none;
+    }
+
+    /* Focus Mode Toggle Button */
+    .btn-focus-toggle {
+      background: var(--surface-container-low);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 0.35rem 0.65rem;
+      color: var(--primary);
       font-size: 0.875rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: var(--transition);
+      font-weight: 500;
+    }
+    .btn-focus-toggle:hover {
+      background: #ffffff;
+      border-color: var(--secondary);
+      color: var(--secondary-hover);
+    }
+    #app-root.focus-mode-active .sidebar {
+      transform: translateX(-100%);
+    }
+    #app-root.focus-mode-active .main-wrapper {
+      margin-left: 0 !important;
+      width: 100% !important;
+    }
+
+    /* Pulsing Status Dot on User Role */
+    .pulse-dot {
+      position: relative;
+    }
+    .pulse-dot::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 50%;
+      background: inherit;
+      opacity: 0.6;
+      animation: pulseDot 2s infinite ease-out;
+    }
+    @keyframes pulseDot {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+
+    /* =====================================================
+     * 3. ACADEMIC GREETING BANNER & ELEVATED KPI CARDS
+     * ===================================================== */
+    .dashboard-greeting-banner {
+      background: linear-gradient(135deg, #0f2744 0%, #1e3a5f 60%, #0d5952 100%);
+      color: #ffffff;
+      border-radius: var(--radius-xl);
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.75rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 32px -8px rgba(15, 39, 68, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .dashboard-greeting-banner::before {
+      content: '';
+      position: absolute;
+      top: -30%;
+      right: -10%;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(20, 184, 166, 0.25) 0%, transparent 70%);
+      pointer-events: none;
+      filter: blur(30px);
+    }
+    .greeting-text h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 0.35rem;
+      letter-spacing: -0.01em;
+    }
+    .greeting-text p {
+      color: #cbd5e1;
+      font-size: 0.875rem;
+      margin: 0;
       line-height: 1.5;
+    }
+    .greeting-chips-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 2;
+    }
+    .greeting-chip {
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+      padding: 0.4rem 0.85rem;
+      border-radius: var(--radius-full);
+      font-size: 0.775rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    /* Elevated KPI Stat Cards */
+    .stat-card-elevated {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.35rem;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 8px -2px rgba(30, 58, 95, 0.05);
+      transition: var(--transition);
+    }
+    .stat-card-elevated:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px -4px rgba(30, 58, 95, 0.1);
+      border-color: #cbd5e1;
+    }
+    .stat-card-elevated::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--secondary) 0%, #3b82f6 100%);
+      opacity: 0.85;
+    }
+    .stat-icon-glass {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+    }
+    .stat-val-huge {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--primary-dark);
+      line-height: 1.2;
+      font-family: var(--font-body);
+    }
+    .stat-lbl-sub {
+      font-size: 0.775rem;
+      color: var(--tertiary);
+      font-weight: 500;
+      margin-top: 0.15rem;
+    }
+
+    /* =====================================================
+     * 4. COURSE CARDS ELEVATION (Modern Aspect Covers, Progress, Hover)
+     * ===================================================== */
+    .card-course-elevated {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      box-shadow: 0 2px 6px rgba(30, 58, 95, 0.04);
+    }
+    .card-course-elevated:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 32px -8px rgba(15, 39, 68, 0.12);
+      border-color: #cbd5e1;
+    }
+    .course-cover-container {
+      height: 110px;
+      padding: 1rem;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+    .course-cover-container::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.4) 100%);
+      pointer-events: none;
+    }
+    .course-cover-container > * {
+      position: relative;
+      z-index: 2;
+    }
+    .course-progress-capsule {
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 9999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .course-progress-bar-fill {
+      height: 100%;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, var(--secondary) 0%, #3b82f6 100%);
+      transition: width 0.4s ease;
+    }
+    .avatar-stack {
+      display: inline-flex;
+      align-items: center;
+    }
+    .avatar-stack-item {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      background: #94a3b8;
+      color: #ffffff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: -6px;
+    }
+    .avatar-stack-item:first-child {
+      margin-left: 0;
+    }
+
+    /* =====================================================
+     * 5. ARABIC TYPOGRAPHY TOOLBAR & FOCUS LEARNING
+     * ===================================================== */
+    .arabic-font-toolbar {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: var(--surface-container);
+      padding: 0.2rem 0.35rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .btn-tool-mini {
+      border: none;
+      background: transparent;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--primary);
+      cursor: pointer;
+      transition: var(--transition);
+      line-height: 1;
+    }
+    .btn-tool-mini:hover {
+      background: #ffffff;
+      box-shadow: var(--shadow-1);
+    }
+    .arabic-font-amiri {
+      font-family: 'Amiri', serif !important;
+    }
+    .arabic-font-naskh {
+      font-family: 'Noto Naskh Arabic', sans-serif !important;
+    }
+
+    /* =====================================================
+     * 6. INTERACTIVE EXAM / QUIZ UI (Dynamic Timer, Card Radios)
+     * ===================================================== */
+    .exam-countdown-timer.warning {
+      background: #fffbeb !important;
+      color: #b45309 !important;
+      border-color: #f59e0b !important;
+    }
+    .exam-countdown-timer.critical {
+      background: #fef2f2 !important;
+      color: #b91c1c !important;
+      border-color: #ef4444 !important;
+      animation: pulseRed 1s infinite alternate;
+    }
+    @keyframes pulseRed {
+      from { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      to { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+    }
+    .exam-option-card {
+      transition: all 0.2s ease;
+      cursor: pointer;
+      user-select: none;
+    }
+    .exam-option-card:hover {
+      border-color: var(--secondary) !important;
+      background: #f0fdfa !important;
+    }
+    .exam-option-card.selected {
+      border-color: var(--secondary) !important;
+      background: #f0fdfa !important;
+      box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.25);
+    }
+
+    /* =====================================================
+     * 7. ENTERPRISE DATA TABLES & STATUS DOTS
+     * ===================================================== */
+    .status-dot-active {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      margin-right: 0.35rem;
+      box-shadow: 0 0 6px #10b981;
+    }
+    .status-dot-inactive {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #94a3b8;
+      margin-right: 0.35rem;
+    }
+
+    /* =====================================================
+     * 8. TOAST NOTIFICATIONS (Glassmorphism & Progress Bar)
+     * ===================================================== */
+    .toast {
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(8px);
+      padding: 0.85rem 1.15rem 0.95rem;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px -5px rgba(2, 36, 72, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .toast-content-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+    .toast-icon {
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .toast-message {
+      font-size: 0.85rem;
+      line-height: 1.4;
+      font-weight: 500;
+    }
+    .toast-progress-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      background: var(--secondary);
+      width: 100%;
+      animation: toastProgress 3.3s linear forwards;
+    }
+    .toast-error .toast-progress-bar {
+      background: #f87171;
+    }
+    .toast-warning .toast-progress-bar {
+      background: #fbbf24;
+    }
+    .toast-fade-out {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.95);
+    }
+    @keyframes toastProgress {
+      from { width: 100%; }
+      to { width: 0%; }
     }
   </style>
 </head>
@@ -3270,19 +3733,39 @@
               <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
           </button>
-          <h1 class="topbar-title" id="page-title">Katalog Course & Modul Ajar</h1>
+          <div class="topbar-title-group">
+            <div class="breadcrumb-trail" id="topbar-breadcrumbs">
+              <span class="bc-item">CourseHub</span>
+              <span class="bc-sep">/</span>
+              <span class="bc-current" id="bc-current-page">Dashboard</span>
+            </div>
+            <h1 class="topbar-title" id="page-title">Katalog Course & Modul Ajar</h1>
+          </div>
         </div>
 
         <div class="topbar-right">
+          <!-- Global Quick Search Bar with Keyboard Shortcut indicator -->
+          <div class="topbar-search-box" id="topbar-search-container" title="Pencarian Cepat Kursus / Materi (Tekan Ctrl + K)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="global-search-input" placeholder="Cari materi..." oninput="handleGlobalSearch(this.value)">
+            <span class="search-kbd-badge">Ctrl K</span>
+          </div>
+
+          <!-- Focus Mode Toggle (Distraction Free / Fullscreen reading) -->
+          <button class="btn-focus-toggle" id="btn-focus-toggle" onclick="toggleFocusMode()" title="Mode Fokus Membaca (Sembunyikan Sidebar)">
+            <span id="focus-toggle-icon">⛶</span>
+            <span id="focus-toggle-text" style="font-size:0.775rem;">Fokus</span>
+          </button>
+
           <!-- Tombol Pintas Persetujuan Tugas (Educator & Admin) -->
           <button class="btn btn-sm" id="topbar-approval-btn" onclick="navigateTo('tutor-approvals')" title="Buka Pusat Persetujuan Tugas Peserta" style="display:none;align-items:center;gap:0.4rem;background:#4338ca;color:#ffffff;border:1px solid #4338ca;font-weight:600;padding:0.35rem 0.75rem;">
             <span>📝 Persetujuan</span>
             <span class="badge" id="topbar-approval-badge" style="background:#ef4444;color:#ffffff;font-size:0.7rem;padding:0.1rem 0.35rem;border-radius:10px;">0</span>
           </button>
 
-          <!-- Active Role Display -->
+          <!-- Active Role Display with Pulsing Dot -->
           <div class="user-role-pill role-educator" id="topbar-role-badge" title="Peran akun aktif saat ini">
-            <span class="role-indicator-dot"></span>
+            <span class="role-indicator-dot pulse-dot"></span>
             <span id="topbar-role-label">Tutor</span>
           </div>
 

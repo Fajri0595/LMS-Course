@@ -2652,6 +2652,22 @@
 
     const container = document.getElementById('view-container');
     const titleEl = document.getElementById('page-title');
+    const bcCurrent = document.getElementById('bc-current-page');
+
+    const viewTitles = {
+      'admin-dashboard': 'Dasbor Utama',
+      'educator-dashboard': 'Katalog Modul',
+      'student-dashboard': 'Ruang Belajar',
+      'student-management': 'Kelola Siswa',
+      'tutor-approvals': 'Persetujuan Tugas',
+      'progress-report': 'Laporan Capaian',
+      'course-player': 'Pembelajaran Aktif',
+      'course-editor': 'Kurikulum Editor',
+      'student-assignments': 'Daftar Tugas Saya'
+    };
+    if (bcCurrent) {
+      bcCurrent.textContent = viewTitles[viewId] || 'Portal';
+    }
 
     switch (viewId) {
       case 'admin-dashboard':
@@ -2843,29 +2859,33 @@
     }
 
     const coursesHtml = myCourses.map(c => `
-      <div class="card card-hover" style="display:flex;flex-direction:column;justify-content:space-between;">
+      <div class="card-course-elevated">
         <div>
-          <div style="height:100px;border-radius:8px;background:${c.coverGradient};margin-bottom:1rem;padding:1rem;color:#fff;display:flex;flex-direction:column;justify-content:space-between;">
-            <span class="badge badge-success" style="align-self:flex-start;background:rgba(255,255,255,0.25);color:#fff;backdrop-filter:blur(4px);">${c.status}</span>
-            <small style="opacity:.9;">${c.contents.length} Unit Konten</small>
+          <div class="course-cover-container" style="background:${c.coverGradient || 'linear-gradient(135deg, #1e3a5f 0%, #0f766e 100%)'};">
+            <span class="badge" style="align-self:flex-start;background:rgba(255,255,255,0.25);color:#fff;backdrop-filter:blur(6px);font-weight:600;font-size:0.75rem;">${c.status || 'Aktif'}</span>
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+              <span style="font-size:0.75rem;opacity:0.95;font-weight:500;">📚 ${c.contents.length} Unit Konten</span>
+              <span style="font-size:0.75rem;font-weight:700;background:rgba(0,0,0,0.25);padding:0.15rem 0.45rem;border-radius:10px;">👥 ${c.enrolledStudents || 0} Siswa</span>
+            </div>
           </div>
-          <h3 style="font-size:1.125rem;margin-bottom:.5rem;line-height:1.4;">${escHtml(c.title)}</h3>
-          <p style="font-size:.8125rem;line-height:1.5;margin-bottom:1.25rem;">${escHtml(c.description || '')}</p>
+          <div style="padding:1.25rem 1.25rem 0.75rem;">
+            <h3 style="font-size:1.1rem;margin-bottom:0.4rem;line-height:1.35;color:var(--primary-dark);font-family:var(--font-heading);">${escHtml(c.title)}</h3>
+            <p style="font-size:0.8125rem;line-height:1.5;margin-bottom:1rem;color:var(--tertiary);">${escHtml(c.description || 'Modul kurikulum pembelajaran interaktif.')}</p>
+          </div>
         </div>
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;font-size:.75rem;color:var(--tertiary);">
-            <span>👥 ${c.enrolledStudents} Siswa Terdaftar</span>
-            <span>📅 ${c.createdAt}</span>
+        <div style="padding:0 1.25rem 1.25rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;font-size:0.75rem;color:var(--tertiary);">
+            <span>📅 Dibuat: ${c.createdAt || '-'}</span>
           </div>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-            <button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;" onclick="navigateTo('course-editor','${c.id}')">
+          <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="navigateTo('course-editor','${c.id}')">
               📚 Kelola Modul
             </button>
             <button class="btn btn-outline btn-sm" onclick="openModalEditCourse('${c.id}')" title="Edit Informasi Course">
               ✏️ Edit
             </button>
             <button class="btn btn-primary btn-sm" onclick="navigateTo('course-player','${c.id}')">
-              ▶ Putar Fullscreen
+              ▶ Putar
             </button>
             ${!isEducator ? `
             <button class="btn btn-ghost btn-sm" onclick="openEnrollModal('${c.id}')" title="Kelola Enrollment" style="color:var(--secondary);">
@@ -2889,42 +2909,68 @@
       return true;
     }).length;
 
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 11 ? 'Selamat Pagi' : (hour < 15 ? 'Selamat Siang' : (hour < 18 ? 'Selamat Sore' : 'Selamat Malam'));
+    const bannerHtml = `
+      <div class="dashboard-greeting-banner">
+        <div class="greeting-text">
+          <h2>${timeGreeting}, ${escHtml(tutorName || 'Tutor Pengampu')}! 👨‍🏫</h2>
+          <p>Portal Pengampu Kelas & Kurikulum Akademik. Pantau capaian peserta dan kelola materi ajar interaktif.</p>
+        </div>
+        <div class="greeting-chips-row">
+          <div class="greeting-chip">
+            <span>📚 ${myCourses.length} Modul Aktif</span>
+          </div>
+          <div class="greeting-chip">
+            <span>👥 ${totalStudents} Siswa Diampu</span>
+          </div>
+          ${pendingApprovalsCount > 0 ? `
+            <div class="greeting-chip" style="background:#ef4444;border-color:#f87171;color:#fff;">
+              <span>⚡ ${pendingApprovalsCount} Menunggu Persetujuan</span>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
     container.innerHTML = `
-      <div class="grid-stats" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#dbeafe;color:#1d4ed8;">
+      ${bannerHtml}
+
+      <div class="grid-stats" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));margin-bottom:1.75rem;">
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#dbeafe;color:#1d4ed8;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
           </div>
           <div>
-            <div class="stat-value">${AppState.courses.length}</div>
-            <div class="stat-label">Total Course Aktif</div>
+            <div class="stat-val-huge">${AppState.courses.length}</div>
+            <div class="stat-lbl-sub">Total Course Aktif</div>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#ccfbf1;color:#0f766e;">
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#ccfbf1;color:#0f766e;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
           </div>
           <div>
-            <div class="stat-value">${totalStudents}</div>
-            <div class="stat-label">Peserta Didik Diampu</div>
+            <div class="stat-val-huge">${totalStudents}</div>
+            <div class="stat-lbl-sub">Peserta Didik Diampu</div>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#fef3c7;color:#b45309;">
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#fef3c7;color:#b45309;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
           </div>
           <div>
-            <div class="stat-value">${totalUnits}</div>
-            <div class="stat-label">Total Unit Materi</div>
+            <div class="stat-val-huge">${totalUnits}</div>
+            <div class="stat-lbl-sub">Total Unit Materi</div>
           </div>
         </div>
-        <div class="stat-card" onclick="navigateTo('tutor-approvals')" style="cursor:pointer;border:${pendingApprovalsCount > 0 ? '2px solid #818cf8;background:#f5f3ff;' : '1px solid var(--border);'}" title="Klik untuk membuka Pusat Persetujuan Tugas">
-          <div class="stat-icon" style="background:#ede9fe;color:#4f46e5;">
+        <div class="stat-card-elevated" onclick="navigateTo('tutor-approvals')" style="cursor:pointer;border:${pendingApprovalsCount > 0 ? '2px solid #818cf8;background:#f5f3ff;' : '1px solid var(--border);'}" title="Klik untuk membuka Pusat Persetujuan Tugas">
+          <div class="stat-icon-glass" style="background:#ede9fe;color:#4f46e5;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
           </div>
           <div>
-            <div class="stat-value" style="${pendingApprovalsCount > 0 ? 'color:#4f46e5;font-weight:800;' : ''}">${pendingApprovalsCount}</div>
-            <div class="stat-label" style="font-weight:600;color:${pendingApprovalsCount > 0 ? '#4338ca' : 'inherit'};">Tugas Perlu Persetujuan ↗</div>
+            <div class="stat-val-huge" style="${pendingApprovalsCount > 0 ? 'color:#4f46e5;font-weight:800;' : ''}">${pendingApprovalsCount}</div>
+            <div class="stat-lbl-sub" style="font-weight:600;color:${pendingApprovalsCount > 0 ? '#4338ca' : 'inherit'};">Persetujuan Tugas ↗</div>
           </div>
         </div>
       </div>
@@ -2968,62 +3014,91 @@
         <td style="font-weight:600;color:var(--primary);">${escHtml(e.name)}</td>
         <td>${escHtml(e.email)}</td>
         <td><span class="badge badge-materi">${escHtml(e.subject)}</span></td>
-        <td>${e.totalCourses} Modul</td>
-        <td><span class="badge ${e.status === 'Nonaktif' ? 'badge-materi' : 'badge-success'}">${escHtml(e.status || 'Aktif')}</span></td>
+        <td><strong>${e.totalCourses}</strong> Modul</td>
+        <td>
+          <span class="badge ${e.status === 'Nonaktif' ? 'badge-draft' : 'badge-success'}">
+            <span class="${e.status === 'Nonaktif' ? 'status-dot-inactive' : 'status-dot-active'}"></span>
+            ${escHtml(e.status || 'Aktif')}
+          </span>
+        </td>
         <td style="display:flex;gap:.375rem;align-items:center;">
-          <button class="btn btn-outline btn-sm" onclick="openModalEditEducator('${e.id}','${escHtml(e.name)}','${escHtml(e.subject)}','${escHtml(e.email || '')}','${escHtml(e.status || 'Aktif')}')">Edit</button>
+          <button class="btn btn-outline btn-sm" onclick="openModalEditEducator('${e.id}','${escHtml(e.name)}','${escHtml(e.subject)}','${escHtml(e.email || '')}','${escHtml(e.status || 'Aktif')}')">✏️ Edit</button>
           <button class="btn btn-authoritative btn-sm" onclick="openModalCreateCourse('${e.id}','${escHtml(e.name)}')">+ Course</button>
-          <button class="btn btn-ghost btn-sm" style="color:var(--error);" onclick="confirmDeleteEducator('${e.id}','${escHtml(e.name)}')">Hapus</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--error);" onclick="confirmDeleteEducator('${e.id}','${escHtml(e.name)}')">🗑️</button>
         </td>
       </tr>
     `).join('');
 
     const allCoursesList = AppState.courses.map(c => `
-      <div class="course-admin-item" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;">
+      <div class="course-admin-item" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-1);">
         <div style="display:flex;align-items:center;gap:.75rem;">
-          <div style="width:12px;height:12px;border-radius:50%;background:var(--secondary);flex-shrink:0;"></div>
+          <div style="width:10px;height:10px;border-radius:50%;background:var(--secondary);flex-shrink:0;box-shadow:0 0 6px var(--secondary);"></div>
           <div>
-            <strong style="font-size:.9375rem;color:var(--primary);">${escHtml(c.title)}</strong>
-            <div style="font-size:.75rem;color:var(--tertiary);">Pengampu: <b>${escHtml(c.authorName)}</b> | ${c.contents.length} Unit | ${c.enrolledStudents} Siswa</div>
+            <strong style="font-size:.95rem;color:var(--primary);">${escHtml(c.title)}</strong>
+            <div style="font-size:.775rem;color:var(--tertiary);margin-top:0.15rem;">Pengampu: <b>${escHtml(c.authorName)}</b> | 📚 ${c.contents.length} Unit | 👥 ${c.enrolledStudents} Siswa Terdaftar</div>
           </div>
         </div>
-        <div class="course-admin-actions" style="display:flex;gap:.5rem;">
-          <button class="btn btn-outline btn-sm" onclick="navigateTo('course-editor','${c.id}')">Edit Kurikulum</button>
-          <button class="btn btn-outline btn-sm" onclick="openModalEditCourse('${c.id}')">✏️ Edit Info</button>
-          <button class="btn btn-primary btn-sm" onclick="navigateTo('course-player','${c.id}')">Inspeksi Fullscreen</button>
-          <button class="btn btn-ghost btn-sm" style="color:var(--secondary);" onclick="openEnrollModal('${c.id}')" title="Kelola Enrollment Siswa">👥 Enrol Siswa</button>
-          <button class="btn btn-ghost btn-sm" style="color:var(--error);" onclick="confirmDeleteCourse('${c.id}')">Hapus</button>
+        <div class="course-admin-actions" style="display:flex;gap:.4rem;">
+          <button class="btn btn-outline btn-sm" onclick="navigateTo('course-editor','${c.id}')">📚 Kurikulum</button>
+          <button class="btn btn-outline btn-sm" onclick="openModalEditCourse('${c.id}')">✏️ Edit</button>
+          <button class="btn btn-primary btn-sm" onclick="navigateTo('course-player','${c.id}')">▶ Putar</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--secondary);" onclick="openEnrollModal('${c.id}')" title="Kelola Enrollment Siswa">👥 Enrol</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--error);" onclick="confirmDeleteCourse('${c.id}')" title="Hapus Course">🗑️</button>
         </div>
       </div>
     `).join('');
 
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 11 ? 'Selamat Pagi' : (hour < 15 ? 'Selamat Siang' : (hour < 18 ? 'Selamat Sore' : 'Selamat Malam'));
+    const adminBannerHtml = `
+      <div class="dashboard-greeting-banner">
+        <div class="greeting-text">
+          <h2>${timeGreeting}, Super Administrator! 🏛️</h2>
+          <p>Pusat Komando & Tata Kelola Pembelajaran CourseHub LMS. Kendalikan seluruh kurikulum, pendidik, dan rombel institusi.</p>
+        </div>
+        <div class="greeting-chips-row">
+          <div class="greeting-chip">
+            <span>📚 ${AppState.courses.length} Course Aktif</span>
+          </div>
+          <div class="greeting-chip">
+            <span>👨‍🏫 ${AppState.educators.length} Guru Pengampu</span>
+          </div>
+          <div class="greeting-chip">
+            <span>👥 ${AppState.students.length} Peserta Terdaftar</span>
+          </div>
+        </div>
+      </div>
+    `;
+
     container.innerHTML = `
-      <div class="grid-stats">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#e0e7ff;color:#3730a3;">
+      ${adminBannerHtml}
+
+      <div class="grid-stats" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));margin-bottom:1.75rem;">
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#e0e7ff;color:#3730a3;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
           </div>
           <div>
-            <div class="stat-value">${AppState.educators.length}</div>
-            <div class="stat-label">Total Guru / Pendidik</div>
+            <div class="stat-val-huge">${AppState.educators.length}</div>
+            <div class="stat-lbl-sub">Total Guru / Pendidik</div>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#ccfbf1;color:#0f766e;">
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#ccfbf1;color:#0f766e;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
           </div>
           <div>
-            <div class="stat-value">${AppState.courses.length}</div>
-            <div class="stat-label">Total Course Institusi</div>
+            <div class="stat-val-huge">${AppState.courses.length}</div>
+            <div class="stat-lbl-sub">Total Course Institusi</div>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#dbeafe;color:#1d4ed8;">
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#dbeafe;color:#1d4ed8;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
           </div>
           <div>
-            <div class="stat-value">${AppState.students.length}</div>
-            <div class="stat-label">Total Peserta Didik</div>
+            <div class="stat-val-huge">${AppState.students.length}</div>
+            <div class="stat-lbl-sub">Total Peserta Didik</div>
           </div>
         </div>
       </div>
@@ -3202,7 +3277,12 @@
         <td style="font-weight:600;color:var(--primary);">${escHtml(s.name)}</td>
         <td>${escHtml(s.email)}</td>
         <td><span class="badge badge-draft">${escHtml(s.class)}</span></td>
-        <td><span class="badge badge-success">${escHtml(s.status)}</span></td>
+        <td>
+          <span class="badge ${s.status === 'Nonaktif' ? 'badge-draft' : 'badge-success'}">
+            <span class="${s.status === 'Nonaktif' ? 'status-dot-inactive' : 'status-dot-active'}"></span>
+            ${escHtml(s.status || 'Aktif')}
+          </span>
+        </td>
         <td style="display:flex;gap:.375rem;flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="openModalEditStudent('${s.id}','${escHtml(s.name)}','${escHtml(s.email)}','${escHtml(s.class || '')}','${escHtml(s.status || 'Aktif')}');">✏️ Edit</button>
           <button class="btn btn-outline btn-sm" onclick="openModalEnrollStudent('${s.id}','${escHtml(s.name)}')">Daftarkan ke Course</button>
@@ -3244,49 +3324,142 @@
 
     if (enrolledCourses.length === 0) {
       container.innerHTML = `
-        <div style="text-align:center;padding:4rem 2rem;">
-          <div style="font-size:3rem;margin-bottom:1rem;">📖</div>
-          <h2>Belum Terdaftar di Course Manapun</h2>
-          <p style="color:var(--tertiary);margin-top:.5rem;">Hubungi guru pengampu untuk mendaftarkan Anda ke course pembelajaran.</p>
+        <div style="text-align:center;padding:4rem 2rem;background:#fff;border-radius:12px;border:1px dashed #cbd5e1;box-shadow:var(--shadow-1);margin-top:1rem;">
+          <div style="font-size:3.5rem;margin-bottom:1rem;">📖</div>
+          <h2 style="font-size:1.4rem;color:var(--primary-dark);margin-bottom:0.5rem;">Belum Terdaftar di Kursus Manapun</h2>
+          <p style="color:var(--tertiary);margin:0 auto 1.5rem;max-width:500px;line-height:1.6;">
+            Akun Anda belum terdaftar di kelas/kursus aktif. Silakan hubungi guru pengampu atau administrator akademik untuk didaftarkan ke materi kurikulum.
+          </p>
         </div>
       `;
       return;
     }
 
+    let totalCompletedUnits = 0;
+    let totalUnits = 0;
+    let completedCoursesCount = 0;
+    let totalProgressSum = 0;
+
     const coursesHtml = enrolledCourses.map(c => {
       const completedCount = c.contents.filter(u => u.completed).length;
       const total = c.contents.length;
       const pct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+      
+      totalCompletedUnits += completedCount;
+      totalUnits += total;
+      totalProgressSum += pct;
+      if (pct === 100 && total > 0) completedCoursesCount++;
+
+      let statusBadge = `<span class="badge" style="background:rgba(255,255,255,0.28);color:#fff;backdrop-filter:blur(6px);font-weight:600;font-size:0.75rem;">🚀 Belum Dimulai</span>`;
+      if (pct === 100) {
+        statusBadge = `<span class="badge" style="background:#10b981;color:#fff;font-weight:700;font-size:0.75rem;">✅ Selesai Tuntas</span>`;
+      } else if (pct > 0) {
+        statusBadge = `<span class="badge" style="background:#f59e0b;color:#fff;font-weight:700;font-size:0.75rem;">📖 Sedang Belajar (${pct}%)</span>`;
+      }
+
       return `
-        <div class="card card-hover" style="display:flex;flex-direction:column;justify-content:space-between;">
+        <div class="card-course-elevated">
           <div>
-            <div style="height:90px;border-radius:8px;background:${c.coverGradient};margin-bottom:1rem;padding:1rem;color:#fff;display:flex;align-items:flex-end;">
-              <span class="badge" style="background:rgba(255,255,255,0.3);color:#fff;">${pct === 100 ? '✅ Selesai' : '📖 Sedang Dipelajari'}</span>
-            </div>
-            <h3 style="font-size:1.125rem;margin-bottom:.5rem;">${escHtml(c.title)}</h3>
-            <p style="font-size:.8125rem;margin-bottom:1rem;">Pengampu: ${escHtml(c.authorName)}</p>
-            <div style="margin-bottom:1rem;">
-              <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:.375rem;">
-                <span>Capaian Materi</span>
-                <strong>${completedCount} dari ${total} Unit</strong>
+            <div class="course-cover-container" style="background:${c.coverGradient || 'linear-gradient(135deg, #1e3a5f 0%, #0f766e 100%)'};">
+              <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                ${statusBadge}
+                <span style="font-size:0.75rem;background:rgba(0,0,0,0.25);padding:0.2rem 0.5rem;border-radius:10px;color:#fff;font-weight:500;">
+                  📚 ${total} Unit
+                </span>
               </div>
-              <div class="progress-track">
-                <div class="progress-fill" style="width:${pct}%;"></div>
+              <div style="font-size:0.8rem;color:#fff;opacity:0.95;font-weight:500;display:flex;align-items:center;gap:0.35rem;">
+                <span>👨‍🏫</span> ${escHtml(c.authorName || 'Tutor Pengampu')}
+              </div>
+            </div>
+            <div style="padding:1.25rem 1.25rem 0.75rem;">
+              <h3 style="font-size:1.1rem;margin-bottom:0.4rem;line-height:1.35;color:var(--primary-dark);font-family:var(--font-heading);">${escHtml(c.title)}</h3>
+              <p style="font-size:0.8125rem;line-height:1.5;margin-bottom:1rem;color:var(--tertiary);">${escHtml(c.description || 'Modul pembelajaran terstruktur interaktif.')}</p>
+              
+              <div style="margin-bottom:0.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.75rem;margin-bottom:0.375rem;">
+                  <span style="color:var(--tertiary);font-weight:600;">Capaian Unit Materi</span>
+                  <strong style="color:var(--primary-dark);">${completedCount} dari ${total} Unit (${pct}%)</strong>
+                </div>
+                <div class="progress-track" style="height:7px;">
+                  <div class="progress-fill" style="width:${pct}%;background:${pct === 100 ? '#10b981' : 'var(--secondary)'};"></div>
+                </div>
               </div>
             </div>
           </div>
-          <button class="btn btn-primary" style="width:100%;" onclick="navigateTo('course-player','${c.id}')">
-            ${pct === 100 ? '✅ Lihat Kembali' : 'Lanjutkan Pembelajaran →'}
-          </button>
+          <div style="padding:0 1.25rem 1.25rem;">
+            <button class="btn ${pct === 100 ? 'btn-outline' : 'btn-primary'}" style="width:100%;font-weight:600;padding:0.65rem 1rem;" onclick="navigateTo('course-player','${c.id}')">
+              ${pct === 100 ? '✅ Lihat Kembali Materi' : (pct > 0 ? 'Lanjutkan Pembelajaran →' : 'Mulai Pembelajaran →')}
+            </button>
+          </div>
         </div>
       `;
     }).join('');
 
-    container.innerHTML = `
-      <div style="margin-bottom:1.5rem;">
-        <h2>Selamat Datang, ${escHtml(AppState.user?.name?.split(' ')[0] || 'Siswa')}! 👋</h2>
-        <p>Akses materi, tonton demonstrasi, dan kerjakan latihan interaktif.</p>
+    const avgProgress = enrolledCourses.length > 0 ? Math.round(totalProgressSum / enrolledCourses.length) : 0;
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 11 ? 'Selamat Pagi' : (hour < 15 ? 'Selamat Siang' : (hour < 18 ? 'Selamat Sore' : 'Selamat Malam'));
+    const studentName = escHtml(AppState.user?.name?.split(' ')[0] || 'Peserta Didik');
+
+    const bannerHtml = `
+      <div class="dashboard-greeting-banner">
+        <div class="greeting-text">
+          <h2>${timeGreeting}, ${studentName}! 🎓</h2>
+          <p>Portal Belajar Peserta Didik. Akses unit kurikulum, tonton video pembelajaran, dan selesaikan evaluasi kompetensi.</p>
+        </div>
+        <div class="greeting-chips-row">
+          <div class="greeting-chip">
+            <span>📚 ${enrolledCourses.length} Kursus Terdaftar</span>
+          </div>
+          <div class="greeting-chip">
+            <span>✅ ${completedCoursesCount} Kursus Diselesaikan</span>
+          </div>
+          <div class="greeting-chip">
+            <span>🎯 ${avgProgress}% Rata-rata Progres</span>
+          </div>
+        </div>
       </div>
+    `;
+
+    container.innerHTML = `
+      ${bannerHtml}
+
+      <div class="grid-stats" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));margin-bottom:1.75rem;">
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#dbeafe;color:#1d4ed8;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          </div>
+          <div>
+            <div class="stat-val-huge">${enrolledCourses.length}</div>
+            <div class="stat-lbl-sub">Kursus Terdaftar</div>
+          </div>
+        </div>
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#ccfbf1;color:#0f766e;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          </div>
+          <div>
+            <div class="stat-val-huge">${totalCompletedUnits} / ${totalUnits}</div>
+            <div class="stat-lbl-sub">Unit Materi Tuntas</div>
+          </div>
+        </div>
+        <div class="stat-card-elevated">
+          <div class="stat-icon-glass" style="background:#fef3c7;color:#b45309;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <div>
+            <div class="stat-val-huge">${avgProgress}%</div>
+            <div class="stat-lbl-sub">Rata-rata Capaian</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+        <div>
+          <h3 style="font-size:1.15rem;margin:0 0 0.25rem;color:var(--primary-dark);font-family:var(--font-heading);">Modul Pembelajaran Anda</h3>
+          <p style="margin:0;font-size:0.8125rem;color:var(--tertiary);">Klik salah satu kursus di bawah untuk membuka ruang belajar.</p>
+        </div>
+      </div>
+
       <div class="grid-courses">${coursesHtml}</div>
     `;
   }
@@ -4526,7 +4699,13 @@
               <h2 style="font-size:1.2rem;margin:0;" dir="auto">${escHtml(currentUnit.title)}</h2>
               ${timerWidgetHtml}
             </div>
-            <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+              <!-- Arabic Font Customization Toolbar -->
+              <div class="arabic-font-toolbar" title="Pengaturan Ukuran & Gaya Font Teks Arab">
+                <button type="button" onclick="adjustArabicFontSize(-10)" title="Kecilkan Font (A-)">A-</button>
+                <button type="button" onclick="adjustArabicFontSize(10)" title="Besarkan Font (A+)">A+</button>
+                <button type="button" onclick="toggleArabicFontFamily()" id="arabic-font-toggle-btn" style="min-width:44px;" title="Ganti Font Teks Arab (Amiri / Naskh)">ع Font</button>
+              </div>
               ${simulationToggleHtml}
               <button class="btn btn-outline btn-sm" onclick="toggleIFPMode()" id="ifp-toggle-btn" title="Mode Layar Penuh (Fullscreen)">
                 🖥️ Fullscreen
@@ -4534,7 +4713,7 @@
             </div>
           </div>
 
-          <div class="player-content-body" id="player-body" dir="auto">
+          <div class="player-content-body ${AppState.arabicFontFamily === 'naskh' ? 'arabic-font-naskh' : 'arabic-font-amiri'}" id="player-body" dir="auto" style="font-size:${AppState.arabicFontSize || 100}%;">
             ${contentHtml}
           </div>
 
@@ -8352,12 +8531,127 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
   }
 
   function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span>${message}</span>`;
-    document.getElementById('toast-container').appendChild(toast);
-    setTimeout(() => toast.remove(), 3500);
+    
+    let icon = '✅';
+    if (type === 'error') icon = '❌';
+    else if (type === 'warning') icon = '⚠️';
+    else if (type === 'info') icon = 'ℹ️';
+
+    toast.innerHTML = `
+      <div class="toast-content-wrapper">
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-message">${message}</span>
+      </div>
+      <div class="toast-progress-bar"></div>
+    `;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('toast-fade-out');
+      setTimeout(() => toast.remove(), 250);
+    }, 3250);
   }
+
+  // --- UI/UX Helpers: Focus Mode, Global Search & Arabic Typography ---
+  function toggleFocusMode() {
+    const root = document.getElementById('app-root');
+    const btn = document.getElementById('btn-focus-toggle');
+    if (!root) return;
+
+    AppState.isFocusMode = !AppState.isFocusMode;
+    if (AppState.isFocusMode) {
+      root.classList.add('focus-mode-active');
+      if (btn) {
+        btn.innerHTML = '✨ Keluar Fokus';
+        btn.classList.add('active');
+        btn.title = 'Nonaktifkan Mode Fokus Belajar';
+      }
+      showToast('🎯 Mode Fokus diaktifkan. Sidebar disembunyikan untuk kenyamanan belajar.', 'info');
+    } else {
+      root.classList.remove('focus-mode-active');
+      if (btn) {
+        btn.innerHTML = '🎯 Mode Fokus';
+        btn.classList.remove('active');
+        btn.title = 'Aktifkan Mode Fokus Belajar';
+      }
+      showToast('✨ Mode Fokus dinonaktifkan.', 'info');
+    }
+  }
+  window.toggleFocusMode = toggleFocusMode;
+
+  function handleGlobalSearch(query) {
+    if (!query) {
+      const cards = document.querySelectorAll('.card-course-elevated, .stat-card-elevated');
+      cards.forEach(c => c.style.display = '');
+      const rows = document.querySelectorAll('.data-table tbody tr');
+      rows.forEach(r => r.style.display = '');
+      return;
+    }
+
+    const q = query.trim().toLowerCase();
+
+    // Filter kartu kursus yang ada di halaman saat ini
+    const courseCards = document.querySelectorAll('.card-course-elevated');
+    if (courseCards.length > 0) {
+      courseCards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+
+    // Filter baris tabel jika sedang di halaman manajemen atau rekap
+    const tableRows = document.querySelectorAll('.data-table tbody tr');
+    if (tableRows.length > 0) {
+      tableRows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+  }
+  window.handleGlobalSearch = handleGlobalSearch;
+
+  function adjustArabicFontSize(delta) {
+    if (!AppState.arabicFontSize) AppState.arabicFontSize = 100;
+    AppState.arabicFontSize = Math.min(180, Math.max(80, AppState.arabicFontSize + delta));
+    const playerBody = document.getElementById('player-body');
+    if (playerBody) {
+      playerBody.style.fontSize = `${AppState.arabicFontSize}%`;
+      showToast(`🔍 Ukuran font diatur ke ${AppState.arabicFontSize}%`, 'info');
+    }
+  }
+  window.adjustArabicFontSize = adjustArabicFontSize;
+
+  function toggleArabicFontFamily() {
+    AppState.arabicFontFamily = AppState.arabicFontFamily === 'naskh' ? 'amiri' : 'naskh';
+    const playerBody = document.getElementById('player-body');
+    if (playerBody) {
+      if (AppState.arabicFontFamily === 'naskh') {
+        playerBody.classList.remove('arabic-font-amiri');
+        playerBody.classList.add('arabic-font-naskh');
+      } else {
+        playerBody.classList.remove('arabic-font-naskh');
+        playerBody.classList.add('arabic-font-amiri');
+      }
+    }
+    const fontName = AppState.arabicFontFamily === 'naskh' ? 'Traditional Naskh' : 'Amiri Quran';
+    showToast(`🔤 Font tulisan berganti: ${fontName}`, 'info');
+  }
+  window.toggleArabicFontFamily = toggleArabicFontFamily;
+
+  // Shortcut keyboard Ctrl + K / Cmd + K untuk quick search
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      const searchInput = document.getElementById('global-search-input');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
+  });
 
   function toggleMobileSidebar() {
     const sidebar = document.querySelector('.sidebar');
