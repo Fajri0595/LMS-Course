@@ -70,6 +70,11 @@
 
     // Setup auth state listener — reaktif terhadap login/logout & callback OAuth
     sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        AppState.loginScreen = 'reset-password';
+        renderLoginPage();
+        return;
+      }
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         if (isStartingSession) return;
         isStartingSession = true;
@@ -82,6 +87,14 @@
         renderLoginPage();
       }
     });
+
+    // Cek apakah ada hash recovery pada URL
+    const initHash = window.location.hash || '';
+    if (initHash.includes('type=recovery')) {
+      AppState.loginScreen = 'reset-password';
+      renderLoginPage();
+      return;
+    }
 
     // Cek session aktif saat pertama load
     const { data: { session } } = await sb.auth.getSession();
@@ -108,7 +121,7 @@
     AppState.authUser = null;
     AppState.isDemoMode = false;
     AppState.authMode = 'login';
-    AppState.loginScreen = 'welcome'; // 'welcome' | 'login' | 'register'
+    if (!AppState.loginScreen) AppState.loginScreen = 'welcome'; // 'welcome' | 'login' | 'register' | 'forgot' | 'reset-password'
     document.getElementById('app-root').style.display = 'none';
 
     let loginEl = document.getElementById('login-overlay');
@@ -133,59 +146,119 @@
       renderLoginFormScreen(loginEl);
     } else if (screen === 'register') {
       renderRegisterFormScreen(loginEl);
+    } else if (screen === 'forgot') {
+      renderForgotPasswordScreen(loginEl);
+    } else if (screen === 'reset-password') {
+      renderResetPasswordScreen(loginEl);
     }
 
     loginEl.style.display = 'flex';
   }
 
-  function renderWelcomeScreen(loginEl) {
-    loginEl.innerHTML = `
-      <div class="login-page">
-        <div class="login-card" style="max-width:480px;">
-          <div class="login-brand">
+  function buildLoginShowcaseHtml() {
+    return `
+      <div class="login-showcase-panel">
+        <div>
+          <div class="showcase-header">
             <div class="brand-logo">C</div>
             <div>
-              <h1 class="brand-title">CourseHub LMS</h1>
-              <p class="brand-subtitle">Platform Manajemen Pembelajaran Interaktif</p>
+              <h2>CourseHub LMS</h2>
+              <p>Platform Akademik Interaktif</p>
             </div>
           </div>
 
-          <p style="text-align:center;color:var(--tertiary);font-size:0.875rem;line-height:1.5;margin-bottom:1.75rem;">
-            Selamat datang di CourseHub! Silakan pilih untuk masuk ke akun yang sudah terdaftar, atau buat akun baru.
-          </p>
+          <div class="showcase-features">
+            <div class="showcase-feat-item">
+              <div class="showcase-feat-icon">🖥️</div>
+              <div class="showcase-feat-text">
+                <h4>Interactive Flat Panel Ready</h4>
+                <p>Dioptimalkan untuk layar sentuh besar di kelas maupun pembelajaran mandiri di perangkat pribadi.</p>
+              </div>
+            </div>
 
-          <!-- Dua Kartu Pilihan -->
-          <div class="login-welcome-choices">
-            <button type="button" class="login-choice-card" onclick="goToLoginScreen()">
-              <div class="login-choice-icon">🔑</div>
-              <div class="login-choice-title">Masuk</div>
-              <div class="login-choice-desc">Saya sudah memiliki akun</div>
-            </button>
-            <button type="button" class="login-choice-card login-choice-register" onclick="goToRegisterScreen()">
-              <div class="login-choice-icon">✨</div>
-              <div class="login-choice-title">Daftar Akun Baru</div>
-              <div class="login-choice-desc">Saya belum memiliki akun</div>
-            </button>
+            <div class="showcase-feat-item">
+              <div class="showcase-feat-icon">📚</div>
+              <div class="showcase-feat-text">
+                <h4>Kurikulum Terstruktur &amp; Modul Dinamis</h4>
+                <p>Materi teks kaya, tipografi Arab berharakat, audio, serta penugasan Google Drive &amp; sesi Zoom.</p>
+              </div>
+            </div>
+
+            <div class="showcase-feat-item">
+              <div class="showcase-feat-icon">🎯</div>
+              <div class="showcase-feat-text">
+                <h4>Evaluasi KKM &amp; Proteksi Remedial</h4>
+                <p>Ujian bertenggat waktu, pengacakan butir soal otomatis, dan kunci jawaban aman terjaga.</p>
+              </div>
+            </div>
+
+            <div class="showcase-feat-item">
+              <div class="showcase-feat-icon">📊</div>
+              <div class="showcase-feat-text">
+                <h4>Audit Capaian &amp; Rekap PDF Standar</h4>
+                <p>Pemantauan kelulusan siswa, persetujuan tutor, dan pencetakan laporan nilai resmi A4 siap unduh.</p>
+              </div>
+            </div>
           </div>
+        </div>
 
-          <div class="login-divider" style="margin:1.5rem 0 1rem;">
-            <span>atau langsung masuk dengan</span>
+        <div class="showcase-footer">
+          <div class="showcase-status-badge">
+            <span class="showcase-status-dot"></span>
+            <span>Sistem Terkoneksi Cloud</span>
           </div>
+          <span>Versi 2.4 Enterprise</span>
+        </div>
+      </div>
+    `;
+  }
 
-          <!-- Google OAuth Cepat (langsung sebagai siswa) -->
-          <button type="button" class="btn-google-login" id="login-google-btn-welcome" onclick="handleGoogleLoginWelcome()">
-            <svg class="google-icon" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-            </svg>
-            <span>Masuk / Daftar dengan Google</span>
-          </button>
+  function renderWelcomeScreen(loginEl) {
+    loginEl.innerHTML = `
+      <div class="login-page">
+        <div class="login-split-card">
+          ${buildLoginShowcaseHtml()}
+          <div class="login-form-panel">
+            <div style="margin-bottom:1.75rem;">
+              <h1 style="font-size:1.625rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.5rem;">Selamat Datang!</h1>
+              <p style="color:var(--tertiary);font-size:0.875rem;margin:0;line-height:1.5;">
+                Silakan masuk dengan akun Anda yang telah terdaftar, atau buat akun baru untuk mulai belajar.
+              </p>
+            </div>
 
-          <p style="text-align:center;font-size:0.75rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
-            Dengan masuk, Anda menyetujui ketentuan layanan dan kebijakan privasi CourseHub LMS.
-          </p>
+            <!-- Dua Kartu Pilihan -->
+            <div class="login-welcome-choices">
+              <button type="button" class="login-choice-card" onclick="goToLoginScreen()">
+                <div class="login-choice-icon">🔑</div>
+                <div class="login-choice-title">Masuk ke Akun</div>
+                <div class="login-choice-desc">Saya sudah memiliki akun</div>
+              </button>
+              <button type="button" class="login-choice-card login-choice-register" onclick="goToRegisterScreen()">
+                <div class="login-choice-icon">✨</div>
+                <div class="login-choice-title">Daftar Akun Baru</div>
+                <div class="login-choice-desc">Saya belum memiliki akun</div>
+              </button>
+            </div>
+
+            <div class="login-divider" style="margin:1.75rem 0 1.25rem;">
+              <span>atau langsung masuk dengan</span>
+            </div>
+
+            <!-- Google OAuth Cepat (langsung sebagai siswa) -->
+            <button type="button" class="btn-google-login" id="login-google-btn-welcome" onclick="handleGoogleLoginWelcome()">
+              <svg class="google-icon" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span>Masuk / Daftar dengan Google</span>
+            </button>
+
+            <p style="text-align:center;font-size:0.75rem;color:var(--tertiary);margin-top:1.5rem;line-height:1.4;">
+              Dengan masuk, Anda menyetujui ketentuan akademik dan kebijakan privasi CourseHub LMS.
+            </p>
+          </div>
         </div>
       </div>
     `;
@@ -193,90 +266,110 @@
 
   function renderLoginFormScreen(loginEl) {
     const target = AppState.activeLoginTab || 'student';
+    const rememberedEmail = localStorage.getItem('coursehub_remember_email') || '';
     const labels = {
       student: { email: 'Email Peserta Didik', btn: 'Masuk sebagai Peserta Didik', hint: 'Portal khusus Peserta Didik. Akun Anda didaftarkan oleh tutor pengampu masing-masing kelas.', google: 'Masuk sebagai Siswa dengan Google', placeholder: 'contoh: siswa@institusi.ac.id' },
-      educator: { email: 'Email Tutor Pengampu', btn: 'Masuk sebagai Tutor', hint: 'Portal khusus Tutor Pengampu. Masuk untuk mengelola materi, jadwal Zoom, dan verifikasi kelulusan tema.', google: 'Masuk sebagai Tutor dengan Google', placeholder: 'contoh: tutor@institusi.ac.id' },
+      educator: { email: 'Email Tutor Pengampu', btn: 'Masuk sebagai Tutor', hint: 'Portal khusus Tutor Pengampu. Masuk untuk mengelola materi, jadwal Zoom, dan verifikasi tugas.', google: 'Masuk sebagai Tutor dengan Google', placeholder: 'contoh: tutor@institusi.ac.id' },
       admin: { email: 'Email Administrator', btn: 'Masuk sebagai Administrator', hint: 'Portal Administrator Pusat Institusi. Akses pengaturan sistem, data pengguna, dan seluruh kurikulum.', google: 'Masuk sebagai Admin dengan Google', placeholder: 'contoh: admin@institusi.ac.id' }
     };
     const l = labels[target];
 
     loginEl.innerHTML = `
       <div class="login-page">
-        <div class="login-card">
-          <div class="login-brand">
-            <div class="brand-logo">C</div>
-            <div>
-              <h1 class="brand-title">Masuk ke CourseHub</h1>
-              <p class="brand-subtitle">Silakan pilih peran dan masukkan kredensial Anda</p>
+        <div class="login-split-card">
+          ${buildLoginShowcaseHtml()}
+          <div class="login-form-panel">
+            <div style="margin-bottom:1.5rem;">
+              <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Masuk ke CourseHub</h1>
+              <p class="brand-subtitle" style="font-size:0.8125rem;color:var(--tertiary);margin:0;">Silakan pilih peran dan masukkan kredensial akun Anda</p>
             </div>
-          </div>
 
-          <!-- Tab Switcher: Peserta Didik vs Tutor vs Administrator -->
-          <div class="auth-tabs">
-            <button type="button" class="auth-tab-btn ${target === 'student' ? 'active' : ''}" id="tab-btn-peserta" onclick="switchLoginRole('student')">
-              Peserta Didik
-            </button>
-            <button type="button" class="auth-tab-btn ${target === 'educator' ? 'active' : ''}" id="tab-btn-tutor" onclick="switchLoginRole('educator')">
-              Tutor
-            </button>
-            <button type="button" class="auth-tab-btn ${target === 'admin' ? 'active' : ''}" id="tab-btn-admin" onclick="switchLoginRole('admin')">
-              Admin
-            </button>
-          </div>
-
-          <div id="login-error" class="login-error" style="display:none;"></div>
-          <div id="login-success" class="login-success" style="display:none;"></div>
-
-          <!-- Tombol Masuk Cepat dengan Google OAuth -->
-          <button type="button" class="btn-google-login" id="login-google-btn" onclick="handleGoogleLogin()">
-            <svg class="google-icon" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-            </svg>
-            <span id="login-google-text">${l.google}</span>
-          </button>
-
-          <div class="login-divider">
-            <span>atau masuk dengan email & password</span>
-          </div>
-
-          <!-- FORM LOGIN -->
-          <form id="form-login" onsubmit="handleAuthSubmit(event)">
-            <div class="form-group">
-              <label class="form-label" id="login-email-label">${l.email}</label>
-              <input type="email" id="login-email" class="form-control" placeholder="${l.placeholder}" required autocomplete="email">
+            <!-- Tab Switcher: Peserta Didik vs Tutor vs Administrator -->
+            <div class="auth-tabs">
+              <button type="button" class="auth-tab-btn ${target === 'student' ? 'active' : ''}" id="tab-btn-peserta" onclick="switchLoginRole('student')">
+                Peserta Didik
+              </button>
+              <button type="button" class="auth-tab-btn ${target === 'educator' ? 'active' : ''}" id="tab-btn-tutor" onclick="switchLoginRole('educator')">
+                Tutor
+              </button>
+              <button type="button" class="auth-tab-btn ${target === 'admin' ? 'active' : ''}" id="tab-btn-admin" onclick="switchLoginRole('admin')">
+                Admin
+              </button>
             </div>
-            <div class="form-group">
-              <label class="form-label">Password</label>
-              <div style="position:relative;">
-                <input type="password" id="login-password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password" style="padding-right:3rem;">
-                <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);">👁️</button>
+
+            <div id="login-error" class="login-error" style="display:none;"></div>
+            <div id="login-success" class="login-success" style="display:none;"></div>
+
+            <!-- Tombol Masuk Cepat dengan Google OAuth -->
+            <button type="button" class="btn-google-login" id="login-google-btn" onclick="handleGoogleLogin()">
+              <svg class="google-icon" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span id="login-google-text">${l.google}</span>
+            </button>
+
+            <div class="login-divider">
+              <span>atau masuk dengan email &amp; password</span>
+            </div>
+
+            <!-- FORM LOGIN -->
+            <form id="form-login" onsubmit="handleAuthSubmit(event)">
+              <div class="form-group">
+                <label class="form-label" id="login-email-label">${l.email}</label>
+                <input type="email" id="login-email" class="form-control" placeholder="${l.placeholder}" value="${escHtml(rememberedEmail)}" required autocomplete="email">
               </div>
+
+              <div class="form-group">
+                <label class="form-label">Password</label>
+                <div style="position:relative;">
+                  <input type="password" id="login-password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password" style="padding-right:3rem;" onkeyup="handleCapsLockCheck(event, 'caps-warning-login')" onkeydown="handleCapsLockCheck(event, 'caps-warning-login')">
+                  <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                </div>
+                <div id="caps-warning-login" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+              </div>
+
+              <!-- Utilitas: Ingat Saya & Lupa Password -->
+              <div class="login-utility-row">
+                <label class="remember-me-label">
+                  <input type="checkbox" id="login-remember-me" ${rememberedEmail ? 'checked' : ''}>
+                  <span>Ingat saya</span>
+                </label>
+                <a href="javascript:void(0)" class="forgot-pw-link" onclick="goToForgotPasswordScreen()">Lupa Password?</a>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.25rem;" id="login-submit-btn">
+                <span id="login-btn-text">${l.btn}</span>
+              </button>
+              <p id="login-hint-text" style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
+                ${l.hint}
+              </p>
+            </form>
+
+            <!-- Kembali & Daftar -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;font-size:0.8125rem;">
+              <a href="javascript:void(0)" onclick="goToWelcomeScreen()" style="color:var(--tertiary);text-decoration:none;display:flex;align-items:center;gap:0.25rem;">
+                ← Kembali
+              </a>
+              <span style="color:var(--tertiary);">
+                Belum punya akun?
+                <a href="javascript:void(0)" onclick="goToRegisterScreen()" style="color:var(--primary);font-weight:600;text-decoration:none;">Daftar di sini</a>
+              </span>
             </div>
-            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
-              <span id="login-btn-text">${l.btn}</span>
-            </button>
-            <p id="login-hint-text" style="text-align:center;font-size:.8125rem;color:var(--tertiary);margin-top:1.25rem;line-height:1.4;">
-              ${l.hint}
-            </p>
-          </form>
 
-          <!-- Kembali & Daftar -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;font-size:0.8125rem;">
-            <a href="javascript:void(0)" onclick="goToWelcomeScreen()" style="color:var(--tertiary);text-decoration:none;display:flex;align-items:center;gap:0.25rem;">
-              ← Kembali
-            </a>
-            <span style="color:var(--tertiary);">
-              Belum punya akun?
-              <a href="javascript:void(0)" onclick="goToRegisterScreen()" style="color:var(--primary);font-weight:600;text-decoration:none;">Daftar di sini</a>
-            </span>
           </div>
-
         </div>
       </div>
     `;
+
+    setTimeout(() => {
+      const emailInput = document.getElementById('login-email');
+      const pwInput = document.getElementById('login-password');
+      if (emailInput && !emailInput.value) emailInput.focus();
+      else if (pwInput) pwInput.focus();
+    }, 50);
   }
 
   function renderRegisterFormScreen(loginEl) {
@@ -290,80 +383,367 @@
 
     loginEl.innerHTML = `
       <div class="login-page">
-        <div class="login-card">
-          <div class="login-brand">
-            <div class="brand-logo">C</div>
-            <div>
-              <h1 class="brand-title">Buat Akun Baru</h1>
-              <p class="brand-subtitle">Bergabung dengan CourseHub LMS</p>
+        <div class="login-split-card">
+          ${buildLoginShowcaseHtml()}
+          <div class="login-form-panel">
+            <div style="margin-bottom:1.5rem;">
+              <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Buat Akun Baru</h1>
+              <p class="brand-subtitle" style="font-size:0.8125rem;color:var(--tertiary);margin:0;">Lengkapi formulir pendaftaran untuk bergabung di CourseHub LMS</p>
             </div>
-          </div>
 
-          <!-- Tab Switcher Role (Peserta Didik & Tutor) -->
-          <div class="auth-tabs">
-            <button type="button" class="auth-tab-btn ${target === 'student' ? 'active' : ''}" onclick="switchRegisterRole('student')">
-              Peserta Didik
+            <!-- Tab Switcher Role (Peserta Didik & Tutor) -->
+            <div class="auth-tabs">
+              <button type="button" class="auth-tab-btn ${target === 'student' ? 'active' : ''}" onclick="switchRegisterRole('student')">
+                Peserta Didik
+              </button>
+              <button type="button" class="auth-tab-btn ${target === 'educator' ? 'active' : ''}" onclick="switchRegisterRole('educator')">
+                Tutor
+              </button>
+            </div>
+
+            <div id="login-error" class="login-error" style="display:none;"></div>
+            <div id="login-success" class="login-success" style="display:none;"></div>
+
+            <!-- Google OAuth Daftar -->
+            <button type="button" class="btn-google-login" id="login-google-btn" onclick="handleGoogleLogin()">
+              <svg class="google-icon" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span id="login-google-text">${l.google}</span>
             </button>
-            <button type="button" class="auth-tab-btn ${target === 'educator' ? 'active' : ''}" onclick="switchRegisterRole('educator')">
-              Tutor
-            </button>
-          </div>
 
-          <div id="login-error" class="login-error" style="display:none;"></div>
-          <div id="login-success" class="login-success" style="display:none;"></div>
-
-          <!-- Google OAuth Daftar -->
-          <button type="button" class="btn-google-login" id="login-google-btn" onclick="handleGoogleLogin()">
-            <svg class="google-icon" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-            </svg>
-            <span id="login-google-text">${l.google}</span>
-          </button>
-
-          <div class="login-divider">
-            <span>atau daftar manual dengan email</span>
-          </div>
-
-          <!-- FORM REGISTER -->
-          <form id="form-login" onsubmit="handleAuthSubmit(event)">
-            <div class="form-group">
-              <label class="form-label">Nama Lengkap <span style="color:var(--error);">*</span></label>
-              <input type="text" id="register-name" class="form-control" placeholder="contoh: Muhammad Farhan" required>
+            <div class="login-divider">
+              <span>atau daftar manual dengan email</span>
             </div>
-            <div class="form-group">
-              <label class="form-label">Email <span style="color:var(--error);">*</span></label>
-              <input type="email" id="login-email" class="form-control" placeholder="${l.placeholder}" required autocomplete="email">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Password <span style="color:var(--error);">*</span></label>
-              <div style="position:relative;">
-                <input type="password" id="login-password" class="form-control" placeholder="Minimal 6 karakter" required autocomplete="new-password" style="padding-right:3rem;" minlength="6">
-                <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);">👁️</button>
+
+            <!-- FORM REGISTER -->
+            <form id="form-login" onsubmit="handleAuthSubmit(event)">
+              <div class="form-group">
+                <label class="form-label">Nama Lengkap <span style="color:var(--error);">*</span></label>
+                <input type="text" id="register-name" class="form-control" placeholder="contoh: Muhammad Farhan" required autocomplete="name">
               </div>
+
+              <div class="form-group">
+                <label class="form-label">Email <span style="color:var(--error);">*</span></label>
+                <input type="email" id="login-email" class="form-control" placeholder="${l.placeholder}" required autocomplete="email">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Password <span style="color:var(--error);">*</span></label>
+                <div style="position:relative;">
+                  <input type="password" id="login-password" class="form-control" placeholder="Minimal 6 karakter" required autocomplete="new-password" style="padding-right:3rem;" minlength="6" oninput="evaluatePasswordStrength(this.value)" onkeyup="handleCapsLockCheck(event, 'caps-warning-register')" onkeydown="handleCapsLockCheck(event, 'caps-warning-register')">
+                  <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                </div>
+                <div id="caps-warning-register" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+
+                <!-- Password Strength Meter Realtime -->
+                <div class="pw-strength-bar">
+                  <div class="pw-strength-progress" id="reg-pw-bar"></div>
+                </div>
+                <div class="pw-strength-label">
+                  <span id="reg-pw-label" style="color:var(--tertiary);">Kekuatan kata sandi:</span>
+                  <span id="reg-pw-score" style="color:var(--tertiary);">-</span>
+                </div>
+                <div class="pw-criteria-list">
+                  <span class="pw-criteria-item" id="crit-len">⚪ Minimal 6 karakter</span>
+                  <span class="pw-criteria-item" id="crit-combo">⚪ Kombinasi huruf &amp; angka</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Konfirmasi Password <span style="color:var(--error);">*</span></label>
+                <div style="position:relative;">
+                  <input type="password" id="register-password-confirm" class="form-control" placeholder="Ketik ulang password baru Anda" required autocomplete="new-password" style="padding-right:3rem;" minlength="6" onkeyup="handleCapsLockCheck(event, 'caps-warning-confirm')" onkeydown="handleCapsLockCheck(event, 'caps-warning-confirm')">
+                  <button type="button" onclick="togglePasswordVis('register-password-confirm')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                </div>
+                <div id="caps-warning-confirm" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
+                <span id="login-btn-text">${l.btn}</span>
+              </button>
+            </form>
+
+            <!-- Kembali & Masuk -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;font-size:0.8125rem;">
+              <a href="javascript:void(0)" onclick="goToWelcomeScreen()" style="color:var(--tertiary);text-decoration:none;display:flex;align-items:center;gap:0.25rem;">
+                ← Kembali
+              </a>
+              <span style="color:var(--tertiary);">
+                Sudah punya akun?
+                <a href="javascript:void(0)" onclick="goToLoginScreen()" style="color:var(--primary);font-weight:600;text-decoration:none;">Masuk di sini</a>
+              </span>
             </div>
-            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
-              <span id="login-btn-text">${l.btn}</span>
-            </button>
-          </form>
 
-          <!-- Kembali & Masuk -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;font-size:0.8125rem;">
-            <a href="javascript:void(0)" onclick="goToWelcomeScreen()" style="color:var(--tertiary);text-decoration:none;display:flex;align-items:center;gap:0.25rem;">
-              ← Kembali
-            </a>
-            <span style="color:var(--tertiary);">
-              Sudah punya akun?
-              <a href="javascript:void(0)" onclick="goToLoginScreen()" style="color:var(--primary);font-weight:600;text-decoration:none;">Masuk di sini</a>
-            </span>
           </div>
-
         </div>
       </div>
     `;
+
+    setTimeout(() => {
+      document.getElementById('register-name')?.focus();
+    }, 50);
   }
+
+  function renderForgotPasswordScreen(loginEl) {
+    if (!loginEl) loginEl = document.getElementById('login-overlay');
+    loginEl.innerHTML = `
+      <div class="login-page">
+        <div class="login-split-card">
+          ${buildLoginShowcaseHtml()}
+          <div class="login-form-panel">
+            <div style="margin-bottom:1.5rem;">
+              <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Pemulihan Kata Sandi</h1>
+              <p class="brand-subtitle" style="font-size:0.8125rem;color:var(--tertiary);margin:0;">
+                Masukkan email yang terdaftar pada akun CourseHub LMS Anda. Kami akan mengirimkan tautan untuk mengatur ulang kata sandi.
+              </p>
+            </div>
+
+            <div id="login-error" class="login-error" style="display:none;"></div>
+            <div id="login-success" class="login-success" style="display:none;"></div>
+
+            <form id="form-forgot-password" onsubmit="handleForgotPasswordSubmit(event)">
+              <div class="form-group">
+                <label class="form-label">Email Terdaftar</label>
+                <input type="email" id="forgot-email" class="form-control" placeholder="contoh: akun@institusi.ac.id" required autocomplete="email">
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.75rem;" id="forgot-submit-btn">
+                <span>Kirim Tautan Reset Password</span>
+              </button>
+            </form>
+
+            <div style="margin-top:1.5rem;text-align:center;">
+              <a href="javascript:void(0)" onclick="goToLoginScreen()" style="color:var(--primary);font-weight:600;font-size:0.875rem;text-decoration:none;display:inline-flex;align-items:center;gap:0.35rem;">
+                ← Kembali ke Halaman Masuk
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    setTimeout(() => {
+      document.getElementById('forgot-email')?.focus();
+    }, 50);
+  }
+
+  function renderResetPasswordScreen(loginEl) {
+    if (!loginEl) loginEl = document.getElementById('login-overlay');
+    loginEl.innerHTML = `
+      <div class="login-page">
+        <div class="login-split-card">
+          ${buildLoginShowcaseHtml()}
+          <div class="login-form-panel">
+            <div style="margin-bottom:1.5rem;">
+              <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Atur Password Baru</h1>
+              <p class="brand-subtitle" style="font-size:0.8125rem;color:var(--tertiary);margin:0;">
+                Silakan buat kata sandi baru untuk akun CourseHub LMS Anda.
+              </p>
+            </div>
+
+            <div id="login-error" class="login-error" style="display:none;"></div>
+            <div id="login-success" class="login-success" style="display:none;"></div>
+
+            <form id="form-reset-password" onsubmit="handleResetPasswordSubmit(event)">
+              <div class="form-group">
+                <label class="form-label">Password Baru</label>
+                <div style="position:relative;">
+                  <input type="password" id="new-password" class="form-control" placeholder="Minimal 6 karakter" required minlength="6" autocomplete="new-password" style="padding-right:3rem;" onkeyup="handleCapsLockCheck(event, 'caps-warning-reset')" onkeydown="handleCapsLockCheck(event, 'caps-warning-reset')">
+                  <button type="button" onclick="togglePasswordVis('new-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                </div>
+                <div id="caps-warning-reset" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Konfirmasi Password Baru</label>
+                <div style="position:relative;">
+                  <input type="password" id="confirm-new-password" class="form-control" placeholder="Ketik ulang password baru" required minlength="6" autocomplete="new-password" style="padding-right:3rem;">
+                  <button type="button" onclick="togglePasswordVis('confirm-new-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.75rem;" id="reset-submit-btn">
+                <span>Simpan Password Baru &amp; Masuk</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+
+    setTimeout(() => {
+      document.getElementById('new-password')?.focus();
+    }, 50);
+  }
+
+  function handleCapsLockCheck(e, targetId = 'caps-warning-login') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    if (e.getModifierState && e.getModifierState('CapsLock')) {
+      el.style.display = 'flex';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+  window.handleCapsLockCheck = handleCapsLockCheck;
+
+  function evaluatePasswordStrength(password) {
+    const bar = document.getElementById('reg-pw-bar');
+    const label = document.getElementById('reg-pw-label');
+    const scoreText = document.getElementById('reg-pw-score');
+    const critLen = document.getElementById('crit-len');
+    const critCombo = document.getElementById('crit-combo');
+
+    if (!bar || !scoreText) return;
+
+    const hasMinLen = (password || '').length >= 6;
+    const hasLetters = /[a-zA-Z]/.test(password || '');
+    const hasNumbers = /[0-9]/.test(password || '');
+    const hasSymbols = /[^a-zA-Z0-9]/.test(password || '');
+    const isCombo = hasLetters && hasNumbers;
+
+    if (critLen) {
+      critLen.className = 'pw-criteria-item ' + (hasMinLen ? 'valid' : '');
+      critLen.innerHTML = (hasMinLen ? '✅' : '⚪') + ' Minimal 6 karakter';
+    }
+    if (critCombo) {
+      critCombo.className = 'pw-criteria-item ' + (isCombo ? 'valid' : '');
+      critCombo.innerHTML = (isCombo ? '✅' : '⚪') + ' Kombinasi huruf &amp; angka';
+    }
+
+    if (!password) {
+      bar.style.width = '0%';
+      bar.style.background = '#e2e8f0';
+      scoreText.textContent = '-';
+      scoreText.style.color = 'var(--tertiary)';
+      return;
+    }
+
+    let score = 0;
+    if (hasMinLen) score += 30;
+    if (hasLetters) score += 20;
+    if (hasNumbers) score += 25;
+    if (hasSymbols || password.length >= 10) score += 25;
+
+    if (score < 40) {
+      bar.style.width = '25%';
+      bar.style.background = '#ef4444';
+      scoreText.textContent = 'Lemah';
+      scoreText.style.color = '#ef4444';
+    } else if (score < 75) {
+      bar.style.width = '60%';
+      bar.style.background = '#f59e0b';
+      scoreText.textContent = 'Sedang';
+      scoreText.style.color = '#d97706';
+    } else {
+      bar.style.width = '100%';
+      bar.style.background = '#10b981';
+      scoreText.textContent = 'Kuat';
+      scoreText.style.color = '#059669';
+    }
+  }
+  window.evaluatePasswordStrength = evaluatePasswordStrength;
+
+  async function handleForgotPasswordSubmit(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgot-email').value.trim();
+    const btn = document.getElementById('forgot-submit-btn');
+    const errEl = document.getElementById('login-error');
+    const succEl = document.getElementById('login-success');
+
+    if (!email) {
+      showLoginError('Mohon masukkan alamat email Anda.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:6px;"></span> Mengirim...';
+    if (errEl) errEl.style.display = 'none';
+    if (succEl) succEl.style.display = 'none';
+
+    const sb = getSupabase();
+    if (!sb) {
+      showLoginError('Koneksi Supabase tidak tersedia.');
+      btn.disabled = false;
+      btn.innerHTML = '<span>Kirim Tautan Reset Password</span>';
+      return;
+    }
+
+    try {
+      const redirectUrl = window.location.origin + window.location.pathname;
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl
+      });
+      if (error) throw error;
+
+      if (succEl) {
+        succEl.innerHTML = `
+          <strong>Tautan Berhasil Dikirim!</strong><br>
+          Kami telah mengirimkan instruksi pemulihan kata sandi ke <strong>${escHtml(email)}</strong>. Silakan periksa kotak masuk atau folder spam Anda.
+        `;
+        succEl.style.display = 'block';
+      }
+      btn.style.display = 'none';
+    } catch (err) {
+      showLoginError('Gagal mengirim pemulihan sandi: ' + (err.message || 'Periksa kembali email Anda.'));
+      btn.disabled = false;
+      btn.innerHTML = '<span>Kirim Tautan Reset Password</span>';
+    }
+  }
+  window.handleForgotPasswordSubmit = handleForgotPasswordSubmit;
+
+  async function handleResetPasswordSubmit(e) {
+    e.preventDefault();
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-new-password').value;
+    const btn = document.getElementById('reset-submit-btn');
+    const errEl = document.getElementById('login-error');
+    const succEl = document.getElementById('login-success');
+
+    if (newPassword.length < 6) {
+      showLoginError('Password minimal 6 karakter.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showLoginError('Konfirmasi password tidak cocok dengan password baru.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = 'Menyimpan Password...';
+    if (errEl) errEl.style.display = 'none';
+
+    const sb = getSupabase();
+    if (!sb) {
+      showLoginError('Koneksi Supabase tidak tersedia.');
+      btn.disabled = false;
+      btn.innerHTML = '<span>Simpan Password Baru &amp; Masuk</span>';
+      return;
+    }
+
+    try {
+      const { error } = await sb.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      if (succEl) {
+        succEl.textContent = '🎉 Kata sandi berhasil diperbarui! Sedang mengalihkan ke halaman masuk...';
+        succEl.style.display = 'block';
+      }
+      setTimeout(() => {
+        window.location.hash = '';
+        goToLoginScreen();
+      }, 1500);
+    } catch (err) {
+      showLoginError('Gagal memperbarui kata sandi: ' + err.message);
+      btn.disabled = false;
+      btn.innerHTML = '<span>Simpan Password Baru &amp; Masuk</span>';
+    }
+  }
+  window.handleResetPasswordSubmit = handleResetPasswordSubmit;
 
   function goToWelcomeScreen() {
     AppState.loginScreen = 'welcome';
@@ -388,6 +768,13 @@
     renderLoginScreen();
   }
   window.goToRegisterScreen = goToRegisterScreen;
+
+  function goToForgotPasswordScreen() {
+    AppState.loginScreen = 'forgot';
+    AppState.authMode = 'login';
+    renderLoginScreen();
+  }
+  window.goToForgotPasswordScreen = goToForgotPasswordScreen;
 
   function handleGoogleLoginWelcome() {
     AppState.activeLoginTab = 'student';
@@ -484,6 +871,7 @@
     const name = document.getElementById('register-name').value.trim();
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
+    const confirmPassword = document.getElementById('register-password-confirm')?.value;
     const btn = document.getElementById('login-submit-btn');
     const btnText = document.getElementById('login-btn-text');
     const originalText = btnText ? btnText.textContent : 'Daftar';
@@ -496,6 +884,10 @@
     }
     if (password.length < 6) {
       showLoginError('Password minimal 6 karakter.');
+      return;
+    }
+    if (confirmPassword !== undefined && password !== confirmPassword) {
+      showLoginError('Konfirmasi kata sandi tidak cocok. Mohon ketik ulang kata sandi dengan benar.');
       return;
     }
 
@@ -511,6 +903,9 @@
     }
 
     try {
+      localStorage.setItem('coursehub_login_mode_intent', 'register');
+      localStorage.setItem('coursehub_login_role_intent', targetRole);
+
       const { data: authData, error: authErr } = await sb.auth.signUp({
         email,
         password,
@@ -551,7 +946,7 @@
         setTimeout(() => {
           const succEl = document.getElementById('login-success');
           if (succEl) {
-            succEl.textContent = '🎉 Pendaftaran berhasil! Silakan masuk dengan email dan password Anda.';
+            succEl.textContent = '🎉 Pendaftaran akun baru berhasil! Silakan masuk dengan email dan kata sandi Anda.';
             succEl.style.display = 'block';
           }
         }, 50);
@@ -565,9 +960,17 @@
   }
 
   async function handleLogin(e) {
+    // 1. Cek Proteksi Brute-Force Rate Limiting
+    if (AppState.loginLockoutUntil && Date.now() < AppState.loginLockoutUntil) {
+      const waitSecs = Math.ceil((AppState.loginLockoutUntil - Date.now()) / 1000);
+      showLoginError(`⏳ Akun dibekukan sementara demi keamanan. Silakan coba kembali dalam ${waitSecs} detik.`);
+      return;
+    }
+
     const target = AppState.activeLoginTab || 'student';
     try {
       localStorage.setItem('coursehub_login_role_intent', target);
+      localStorage.setItem('coursehub_login_mode_intent', 'login');
     } catch (err) {}
 
     const email = document.getElementById('login-email').value.trim();
@@ -590,15 +993,35 @@
 
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) {
+      AppState.failedAttempts = (AppState.failedAttempts || 0) + 1;
       let msg = error.message || '';
       if (msg.includes('Invalid login credentials')) {
-        msg = 'Email atau password salah. Jika Anda mendaftar melalui akun Google, silakan gunakan tombol "Masuk dengan Google".';
+        msg = 'Email atau kata sandi tidak cocok. Jika Anda mendaftar melalui akun Google, silakan gunakan tombol "Masuk dengan Google".';
       }
-      showLoginError(msg);
+
+      if (AppState.failedAttempts >= 4) {
+        AppState.loginLockoutUntil = Date.now() + (30 * 1000);
+        showLoginError('⛔ Terlalu banyak percobaan login gagal (4x). Demi keamanan, proses login dibekukan selama 30 detik.');
+      } else {
+        showLoginError(msg + ` (Percobaan ${AppState.failedAttempts} dari 4)`);
+      }
+
       btn.disabled = false;
       btn.innerHTML = loginBtnOriginal;
+      return;
     }
-    // Jika berhasil, onAuthStateChange akan memicu handleSessionStart()
+
+    // Login Sukses: Bersihkan counter percobaan gagal
+    AppState.failedAttempts = 0;
+    delete AppState.loginLockoutUntil;
+
+    // Persistensi "Ingat Saya"
+    const rememberCheckbox = document.getElementById('login-remember-me');
+    if (rememberCheckbox && rememberCheckbox.checked) {
+      localStorage.setItem('coursehub_remember_email', email);
+    } else {
+      localStorage.removeItem('coursehub_remember_email');
+    }
   }
 
   async function handleSessionStart(authUser) {
@@ -637,9 +1060,20 @@
         // Cek apakah login via Google
         const isGoogleUser = authUser.app_metadata?.provider === 'google' || 
           (authUser.identities && authUser.identities.some(i => i.provider === 'google'));
+        const savedMode = localStorage.getItem('coursehub_login_mode_intent') || AppState.authMode;
 
         if (isGoogleUser && activeTab === 'student') {
-          // Otomatis daftarkan profile Peserta Baru jika login lewat tab Peserta Didik
+          // JANGAN otomatis daftarkan akun baru jika pengguna bermaksud MASUK (login biasa)
+          // Ini mencegah akun yang telah dihapus admin otomatis hidup kembali!
+          if (savedMode !== 'register') {
+            showLoginError(`⛔ Akses Ditolak: Akun (${authUser.email}) tidak ditemukan di sistem atau telah dinonaktifkan/dihapus oleh Administrator. Silakan hubungi admin.`);
+            await getSupabase().auth.signOut();
+            AppState.user = null;
+            AppState.authUser = null;
+            return;
+          }
+
+          // Otomatis daftarkan profile Peserta Baru jika pendaftaran resmi lewat tab Peserta Didik
           const fullName = authUser.user_metadata?.full_name || 
                            authUser.user_metadata?.name || 
                            authUser.email.split('@')[0];
@@ -708,7 +1142,6 @@
             return;
           }
         } else if (isGoogleUser && activeTab === 'educator') {
-          const savedMode = localStorage.getItem('coursehub_login_mode_intent');
           if (savedMode === 'register') {
             // Pengguna mendaftar sebagai Tutor baru lewat Google
             const fullName = authUser.user_metadata?.full_name || 
@@ -738,13 +1171,15 @@
               return;
             }
           } else {
-            showLoginError(`⛔ Akses Ditolak: Akun Google (${authUser.email}) belum terdaftar sebagai Tutor Pengampu. Silakan daftar akun baru terlebih dahulu atau hubungi admin.`);
+            showLoginError(`⛔ Akses Ditolak: Akun Google (${authUser.email}) belum terdaftar sebagai Tutor Pengampu atau telah dinonaktifkan.`);
             await getSupabase().auth.signOut();
             return;
           }
         } else {
-          showLoginError('Profil pengguna tidak ditemukan di database. Hubungi administrator.');
+          showLoginError(`⛔ Akses Ditolak: Akun (${authUser.email}) tidak ditemukan di sistem atau telah dinonaktifkan/dihapus oleh Administrator. Hubungi administrator.`);
           await getSupabase().auth.signOut();
+          AppState.user = null;
+          AppState.authUser = null;
           return;
         }
       }
@@ -6903,22 +7338,34 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
       showToast('Sedang menghapus akun pendidik...', 'info');
       const sb = getSupabase();
       if (sb && !AppState.isDemoMode) {
-        // 1. Lepaskan keterkaitan author_id di tabel courses agar tidak memicu foreign key violation
+        // Coba panggil stored procedure RPC delete_user_account jika sudah diinstal di Supabase
+        let rpcDeleted = false;
         try {
-          await sb.from('courses').update({ author_id: null, author_name: 'Belum Ditentukan' }).eq('author_id', id);
-        } catch (e) {
-          console.warn('Gagal lepas author_id di courses:', e);
+          const { data: rpcRes, error: rpcErr } = await sb.rpc('delete_user_account', { target_user_id: id });
+          if (!rpcErr && rpcRes && rpcRes.success) {
+            rpcDeleted = true;
+          }
+        } catch (_) {}
+
+        if (!rpcDeleted) {
+          // 1. Lepaskan keterkaitan author_id di tabel courses agar tidak memicu foreign key violation
+          try {
+            await sb.from('courses').update({ author_id: null, author_name: 'Belum Ditentukan' }).eq('author_id', id);
+          } catch (e) {
+            console.warn('Gagal lepas author_id di courses:', e);
+          }
+
+          // 2. Bersihkan pendaftaran, progress, atau submissions terkait jika ada
+          try { await sb.from('enrollments').delete().eq('student_id', id); } catch (_) {}
+          try { await sb.from('progress').delete().eq('student_id', id); } catch (_) {}
+          try { await sb.from('submissions').delete().eq('tutor_id', id); } catch (_) {}
+          try { await sb.from('submissions').delete().eq('student_id', id); } catch (_) {}
+
+          // 3. Hapus profil dari tabel profiles
+          const { error } = await sb.from('profiles').delete().eq('id', id);
+          if (error) throw error;
         }
 
-        // 2. Bersihkan pendaftaran, progress, atau submissions terkait jika ada
-        try { await sb.from('enrollments').delete().eq('student_id', id); } catch (_) {}
-        try { await sb.from('progress').delete().eq('student_id', id); } catch (_) {}
-        try { await sb.from('submissions').delete().eq('tutor_id', id); } catch (_) {}
-        try { await sb.from('submissions').delete().eq('student_id', id); } catch (_) {}
-
-        // 3. Hapus profil dari tabel profiles
-        const { error } = await sb.from('profiles').delete().eq('id', id);
-        if (error) throw error;
         showToast(`✅ Akun pendidik "${name}" berhasil dihapus dari database.`, 'success');
       } else {
         showToast(`✅ Akun pendidik "${name}" dihapus (mode demo).`, 'success');
@@ -6971,7 +7418,7 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
       `⚠️ PERINGATAN: Anda akan menghapus akun peserta didik "${studentName}".\n\n` +
       `• Riwayat pengerjaan materi & nilai kuis\n` +
       `• Pendaftaran ke seluruh course (enrollments)\n` +
-      `• Profil akun peserta didik\n\n` +
+      `• Profil akun peserta didik & autentikasi sistem\n\n` +
       `Tindakan ini permanen. Lanjutkan?`
     );
     if (!confirmed) return;
@@ -6980,18 +7427,30 @@ Penjelasan: Neraca saldo menguji kesamaan matematis antara total debit dan total
       showToast('Sedang menghapus peserta didik...', 'info');
       const sb = getSupabase();
       if (sb && !AppState.isDemoMode) {
-        // 1. Hapus entitas relasi terlebih dahulu dengan kolom yang tepat (student_id)
-        const { error: prErr } = await sb.from('progress').delete().eq('student_id', studentId);
-        if (prErr) console.warn('Pembersihan progress siswa:', prErr);
+        // Coba panggil stored procedure RPC delete_user_account jika sudah diinstal di Supabase
+        let rpcDeleted = false;
+        try {
+          const { data: rpcRes, error: rpcErr } = await sb.rpc('delete_user_account', { target_user_id: studentId });
+          if (!rpcErr && rpcRes && rpcRes.success) {
+            rpcDeleted = true;
+          }
+        } catch (_) {}
 
-        const { error: enErr } = await sb.from('enrollments').delete().eq('student_id', studentId);
-        if (enErr) console.warn('Pembersihan enrollments siswa:', enErr);
+        if (!rpcDeleted) {
+          // 1. Hapus entitas relasi terlebih dahulu dengan kolom yang tepat (student_id)
+          const { error: prErr } = await sb.from('progress').delete().eq('student_id', studentId);
+          if (prErr) console.warn('Pembersihan progress siswa:', prErr);
 
-        try { await sb.from('submissions').delete().eq('student_id', studentId); } catch (_) {}
-        
-        // 2. Hapus profil dari tabel profiles
-        const { error } = await sb.from('profiles').delete().eq('id', studentId);
-        if (error) throw error;
+          const { error: enErr } = await sb.from('enrollments').delete().eq('student_id', studentId);
+          if (enErr) console.warn('Pembersihan enrollments siswa:', enErr);
+
+          try { await sb.from('submissions').delete().eq('student_id', studentId); } catch (_) {}
+          
+          // 2. Hapus profil dari tabel profiles
+          const { error } = await sb.from('profiles').delete().eq('id', studentId);
+          if (error) throw error;
+        }
+
         showToast(`✅ Data peserta didik "${studentName}" berhasil dihapus dari database.`, 'success');
       } else {
         showToast(`✅ Data peserta didik "${studentName}" dihapus (mode demo).`, 'success');

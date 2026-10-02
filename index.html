@@ -2231,7 +2231,184 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 1rem 0;
+      padding: 1.5rem 0;
+    }
+
+    /* Split-Screen Modern Dual Panel Card */
+    .login-split-card {
+      background: #ffffff;
+      border-radius: var(--radius-xl);
+      width: 100%;
+      max-width: 980px;
+      min-height: 580px;
+      display: flex;
+      overflow: hidden;
+      box-shadow: 0 25px 60px -15px rgba(2, 36, 72, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15);
+      animation: loginFadeIn 0.4s ease-out;
+      box-sizing: border-box;
+    }
+
+    /* Panel Kiri: Showcase Edukasi & Branding */
+    .login-showcase-panel {
+      flex: 1 1 44%;
+      background: linear-gradient(150deg, #091e36 0%, #162f50 50%, #0d5952 100%);
+      padding: 3rem 2.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      color: #ffffff;
+      position: relative;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .login-showcase-panel::before {
+      content: '';
+      position: absolute;
+      top: -25%;
+      right: -25%;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(20, 184, 166, 0.3) 0%, transparent 70%);
+      pointer-events: none;
+      filter: blur(40px);
+    }
+
+    .login-showcase-panel::after {
+      content: '';
+      position: absolute;
+      bottom: -20%;
+      left: -20%;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.25) 0%, transparent 70%);
+      pointer-events: none;
+      filter: blur(40px);
+    }
+
+    .showcase-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      position: relative;
+      z-index: 2;
+    }
+
+    .showcase-header .brand-logo {
+      width: 48px;
+      height: 48px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--secondary) 0%, #0284c7 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      box-shadow: 0 8px 16px -4px rgba(20, 184, 166, 0.4);
+    }
+
+    .showcase-header h2 {
+      font-size: 1.375rem;
+      font-weight: 700;
+      margin: 0;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+
+    .showcase-header p {
+      font-size: 0.8125rem;
+      color: #94a3b8;
+      margin: 0.15rem 0 0;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .showcase-features {
+      margin: 2rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      position: relative;
+      z-index: 2;
+    }
+
+    .showcase-feat-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.875rem;
+    }
+
+    .showcase-feat-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .showcase-feat-text h4 {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      margin: 0 0 0.2rem;
+      color: #ffffff;
+    }
+
+    .showcase-feat-text p {
+      font-size: 0.8125rem;
+      line-height: 1.4;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .showcase-footer {
+      position: relative;
+      z-index: 2;
+      padding-top: 1.25rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .showcase-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+      padding: 0.25rem 0.6rem;
+      border-radius: var(--radius-full);
+      font-weight: 600;
+    }
+
+    .showcase-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    /* Panel Kanan: Form Autentikasi */
+    .login-form-panel {
+      flex: 1 1 56%;
+      background: #ffffff;
+      padding: 2.75rem 2.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-sizing: border-box;
+      overflow-y: auto;
     }
 
     .login-card {
@@ -2239,10 +2416,109 @@
       border-radius: var(--radius-xl);
       padding: 2.5rem 2.25rem;
       width: 100%;
-      max-width: 440px;
+      max-width: 460px;
       box-shadow: 0 25px 50px -12px rgba(2, 36, 72, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.1);
       animation: loginFadeIn 0.4s ease-out;
       box-sizing: border-box;
+    }
+
+    /* Utilitas Login: Caps Lock Warning, Remember Me, Forgot Password */
+    .caps-warning {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+      padding: 0.35rem 0.65rem;
+      font-size: 0.75rem;
+      border-radius: var(--radius-sm);
+      margin-top: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      animation: loginFadeIn 0.2s ease;
+    }
+
+    .login-utility-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0.75rem 0 1.25rem;
+      font-size: 0.8125rem;
+    }
+
+    .remember-me-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      color: var(--on-surface-variant);
+      user-select: none;
+    }
+
+    .forgot-pw-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .forgot-pw-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Password Strength Meter */
+    .pw-strength-bar {
+      height: 4px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
+
+    .pw-strength-progress {
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s ease, background 0.3s ease;
+    }
+
+    .pw-strength-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-top: 0.3rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .pw-criteria-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.4rem;
+      font-size: 0.7rem;
+      color: var(--tertiary);
+    }
+
+    .pw-criteria-item {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .pw-criteria-item.valid {
+      color: #16a34a;
+      font-weight: 600;
+    }
+
+    @media (max-width: 860px) {
+      .login-split-card {
+        flex-direction: column;
+        max-width: 480px;
+      }
+      .login-showcase-panel {
+        display: none;
+      }
+      .login-form-panel {
+        padding: 2rem 1.5rem;
+      }
     }
 
     @keyframes loginFadeIn {
