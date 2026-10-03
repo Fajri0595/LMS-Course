@@ -200,40 +200,48 @@
             <img src="favicon.svg" alt="CourseHub Logo" class="brand-logo-img" style="width:48px;height:48px;box-shadow:0 8px 24px rgba(0,0,0,0.35);">
             <div>
               <h2>CourseHub LMS</h2>
-              <p>Platform Akademik Interaktif</p>
+              <p>Platform Akademik Terpadu</p>
             </div>
           </div>
 
           <div class="showcase-features">
             <div class="showcase-feat-item">
-              <div class="showcase-feat-icon">🖥️</div>
+              <div class="showcase-feat-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+              </div>
               <div class="showcase-feat-text">
                 <h4>Interactive Flat Panel Ready</h4>
-                <p>Dioptimalkan untuk layar sentuh besar di kelas maupun pembelajaran mandiri di perangkat pribadi.</p>
+                <p>Dioptimalkan untuk layar sentuh besar di ruang kelas maupun pembelajaran mandiri di perangkat pribadi.</p>
               </div>
             </div>
 
             <div class="showcase-feat-item">
-              <div class="showcase-feat-icon">📚</div>
+              <div class="showcase-feat-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              </div>
               <div class="showcase-feat-text">
                 <h4>Kurikulum Terstruktur &amp; Modul Dinamis</h4>
-                <p>Materi teks kaya, tipografi Arab berharakat, audio, serta penugasan Google Drive &amp; sesi Zoom.</p>
+                <p>Materi teks kaya, tipografi Arab berharakat, audio, penugasan digital, serta integrasi sesi tatap muka.</p>
               </div>
             </div>
 
             <div class="showcase-feat-item">
-              <div class="showcase-feat-icon">🎯</div>
+              <div class="showcase-feat-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+              </div>
               <div class="showcase-feat-text">
-                <h4>Evaluasi KKM &amp; Proteksi Remedial</h4>
-                <p>Ujian bertenggat waktu, pengacakan butir soal otomatis, dan kunci jawaban aman terjaga.</p>
+                <h4>Evaluasi KKM &amp; Standar Kelulusan</h4>
+                <p>Ujian bertenggat waktu, pengacakan butir soal otomatis, dan evaluasi hasil belajar yang komprehensif.</p>
               </div>
             </div>
 
             <div class="showcase-feat-item">
-              <div class="showcase-feat-icon">📊</div>
+              <div class="showcase-feat-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+              </div>
               <div class="showcase-feat-text">
-                <h4>Audit Capaian &amp; Rekap PDF Standar</h4>
-                <p>Pemantauan kelulusan siswa, persetujuan tutor, dan pencetakan laporan nilai resmi A4 siap unduh.</p>
+                <h4>Audit Capaian &amp; Laporan Akademik</h4>
+                <p>Pemantauan progres belajar, persetujuan tutor, dan pencetakan lembar laporan resmi institusi.</p>
               </div>
             </div>
           </div>
@@ -257,28 +265,28 @@
           ${buildLoginShowcaseHtml()}
           <div class="login-form-panel">
             <div style="margin-bottom:1.75rem;">
-              <h1 style="font-size:1.625rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.5rem;">Selamat Datang!</h1>
+              <h1 style="font-size:1.625rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.5rem;">Portal Akademik</h1>
               <p style="color:var(--tertiary);font-size:0.875rem;margin:0;line-height:1.5;">
-                Silakan masuk dengan akun Anda yang telah terdaftar, atau buat akun baru untuk mulai belajar.
+                Selamat datang di CourseHub LMS. Silakan pilih opsi untuk masuk ke akun Anda atau melakukan pendaftaran baru.
               </p>
             </div>
 
-            <!-- Dua Kartu Pilihan -->
+            <!-- Menu Pilihan: Masuk & Daftar Akun (Tanpa Ikon) -->
             <div class="login-welcome-choices">
               <button type="button" class="login-choice-card" onclick="goToLoginScreen()">
-                <div class="login-choice-icon">🔑</div>
                 <div class="login-choice-title">Masuk ke Akun</div>
-                <div class="login-choice-desc">Saya sudah memiliki akun</div>
+                <div class="login-choice-desc">Bagi peserta didik, tutor, atau administrator yang telah memiliki akun terdaftar.</div>
+                <div class="login-choice-action">Lanjutkan &rarr;</div>
               </button>
-              <button type="button" class="login-choice-card login-choice-register" onclick="goToRegisterScreen()">
-                <div class="login-choice-icon">✨</div>
+              <button type="button" class="login-choice-card" onclick="goToRegisterScreen()">
                 <div class="login-choice-title">Daftar Akun Baru</div>
-                <div class="login-choice-desc">Saya belum memiliki akun</div>
+                <div class="login-choice-desc">Registrasi mandiri bagi peserta didik baru atau calon pengajar institusi.</div>
+                <div class="login-choice-action">Lanjutkan &rarr;</div>
               </button>
             </div>
 
-            <div class="login-divider" style="margin:1.75rem 0 1.25rem;">
-              <span>atau langsung masuk dengan</span>
+            <div class="login-divider" style="margin:1.5rem 0 1.25rem;">
+              <span>atau masuk langsung menggunakan</span>
             </div>
 
             <!-- Google OAuth Cepat (langsung sebagai siswa) -->
@@ -289,11 +297,11 @@
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
               </svg>
-              <span>Masuk / Daftar dengan Google</span>
+              <span>Masuk dengan Google</span>
             </button>
 
             <p style="text-align:center;font-size:0.75rem;color:var(--tertiary);margin-top:1.5rem;line-height:1.4;">
-              Dengan masuk, Anda menyetujui ketentuan akademik dan kebijakan privasi CourseHub LMS.
+              Dengan mengakses sistem, Anda menyetujui ketentuan akademik dan kebijakan privasi CourseHub LMS.
             </p>
           </div>
         </div>
@@ -316,12 +324,18 @@
         <div class="login-split-card">
           ${buildLoginShowcaseHtml()}
           <div class="login-form-panel">
-            <div style="margin-bottom:1.5rem;">
-              <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Masuk ke CourseHub</h1>
+            <div style="margin-bottom:1.25rem;">
+              <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Masuk ke Akun</h1>
               <p class="brand-subtitle" style="font-size:0.8125rem;color:var(--tertiary);margin:0;">Silakan pilih peran dan masukkan kredensial akun Anda</p>
             </div>
 
-            <!-- Tab Switcher: Peserta Didik vs Tutor vs Administrator -->
+            <!-- Navigasi Mode: Masuk vs Daftar Akun (Tanpa Ikon) -->
+            <div class="auth-mode-switch">
+              <button type="button" class="auth-mode-btn active" onclick="goToLoginScreen()">Masuk</button>
+              <button type="button" class="auth-mode-btn" onclick="goToRegisterScreen()">Daftar Akun</button>
+            </div>
+
+            <!-- Tab Switcher Peran: Peserta Didik vs Tutor vs Administrator (Tanpa Ikon) -->
             <div class="auth-tabs">
               <button type="button" class="auth-tab-btn ${target === 'student' ? 'active' : ''}" id="tab-btn-peserta" onclick="switchLoginRole('student')">
                 Peserta Didik
@@ -363,9 +377,14 @@
                 <label class="form-label">Password</label>
                 <div style="position:relative;">
                   <input type="password" id="login-password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password" style="padding-right:3rem;" onkeyup="handleCapsLockCheck(event, 'caps-warning-login')" onkeydown="handleCapsLockCheck(event, 'caps-warning-login')">
-                  <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                  <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);display:flex;align-items:center;padding:0.25rem;" title="Lihat/Sembunyikan Password">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
                 </div>
-                <div id="caps-warning-login" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+                <div id="caps-warning-login" class="caps-warning" style="display:none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <span>Caps Lock aktif pada keyboard</span>
+                </div>
               </div>
 
               <!-- Utilitas: Ingat Saya & Lupa Password -->
@@ -388,7 +407,7 @@
             <!-- Kembali & Daftar -->
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;font-size:0.8125rem;">
               <a href="javascript:void(0)" onclick="goToWelcomeScreen()" style="color:var(--tertiary);text-decoration:none;display:flex;align-items:center;gap:0.25rem;">
-                ← Kembali
+                &larr; Kembali
               </a>
               <span style="color:var(--tertiary);">
                 Belum punya akun?
@@ -423,12 +442,18 @@
         <div class="login-split-card">
           ${buildLoginShowcaseHtml()}
           <div class="login-form-panel">
-            <div style="margin-bottom:1.5rem;">
-              <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Buat Akun Baru</h1>
+            <div style="margin-bottom:1.25rem;">
+              <h1 class="brand-title" style="font-size:1.5rem;font-weight:700;color:var(--primary-dark);margin:0 0 0.35rem;">Pendaftaran Akun Baru</h1>
               <p class="brand-subtitle" style="font-size:0.8125rem;color:var(--tertiary);margin:0;">Lengkapi formulir pendaftaran untuk bergabung di CourseHub LMS</p>
             </div>
 
-            <!-- Tab Switcher Role (Peserta Didik & Tutor) -->
+            <!-- Navigasi Mode: Masuk vs Daftar Akun (Tanpa Ikon) -->
+            <div class="auth-mode-switch">
+              <button type="button" class="auth-mode-btn" onclick="goToLoginScreen()">Masuk</button>
+              <button type="button" class="auth-mode-btn active" onclick="goToRegisterScreen()">Daftar Akun</button>
+            </div>
+
+            <!-- Tab Switcher Role (Peserta Didik & Tutor - Tanpa Ikon) -->
             <div class="auth-tabs">
               <button type="button" class="auth-tab-btn ${target === 'student' ? 'active' : ''}" onclick="switchRegisterRole('student')">
                 Peserta Didik
@@ -472,9 +497,14 @@
                 <label class="form-label">Password <span style="color:var(--error);">*</span></label>
                 <div style="position:relative;">
                   <input type="password" id="login-password" class="form-control" placeholder="Minimal 6 karakter" required autocomplete="new-password" style="padding-right:3rem;" minlength="6" oninput="evaluatePasswordStrength(this.value)" onkeyup="handleCapsLockCheck(event, 'caps-warning-register')" onkeydown="handleCapsLockCheck(event, 'caps-warning-register')">
-                  <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                  <button type="button" onclick="togglePasswordVis('login-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);display:flex;align-items:center;padding:0.25rem;" title="Lihat/Sembunyikan Password">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
                 </div>
-                <div id="caps-warning-register" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+                <div id="caps-warning-register" class="caps-warning" style="display:none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <span>Caps Lock aktif pada keyboard</span>
+                </div>
 
                 <!-- Password Strength Meter Realtime -->
                 <div class="pw-strength-bar">
@@ -485,8 +515,8 @@
                   <span id="reg-pw-score" style="color:var(--tertiary);">-</span>
                 </div>
                 <div class="pw-criteria-list">
-                  <span class="pw-criteria-item" id="crit-len">⚪ Minimal 6 karakter</span>
-                  <span class="pw-criteria-item" id="crit-combo">⚪ Kombinasi huruf &amp; angka</span>
+                  <span class="pw-criteria-item" id="crit-len">Minimal 6 karakter</span>
+                  <span class="pw-criteria-item" id="crit-combo">Kombinasi huruf &amp; angka</span>
                 </div>
               </div>
 
@@ -494,9 +524,14 @@
                 <label class="form-label">Konfirmasi Password <span style="color:var(--error);">*</span></label>
                 <div style="position:relative;">
                   <input type="password" id="register-password-confirm" class="form-control" placeholder="Ketik ulang password baru Anda" required autocomplete="new-password" style="padding-right:3rem;" minlength="6" onkeyup="handleCapsLockCheck(event, 'caps-warning-confirm')" onkeydown="handleCapsLockCheck(event, 'caps-warning-confirm')">
-                  <button type="button" onclick="togglePasswordVis('register-password-confirm')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                  <button type="button" onclick="togglePasswordVis('register-password-confirm')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);display:flex;align-items:center;padding:0.25rem;" title="Lihat/Sembunyikan Password">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
                 </div>
-                <div id="caps-warning-confirm" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+                <div id="caps-warning-confirm" class="caps-warning" style="display:none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <span>Caps Lock aktif pada keyboard</span>
+                </div>
               </div>
 
               <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.75rem;" id="login-submit-btn">
@@ -507,7 +542,7 @@
             <!-- Kembali & Masuk -->
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.25rem;font-size:0.8125rem;">
               <a href="javascript:void(0)" onclick="goToWelcomeScreen()" style="color:var(--tertiary);text-decoration:none;display:flex;align-items:center;gap:0.25rem;">
-                ← Kembali
+                &larr; Kembali
               </a>
               <span style="color:var(--tertiary);">
                 Sudah punya akun?
@@ -590,9 +625,14 @@
                 <label class="form-label">Password Baru <span style="color:var(--error);">*</span></label>
                 <div style="position:relative;">
                   <input type="password" id="new-password" class="form-control" placeholder="Minimal 6 karakter" required minlength="6" autocomplete="new-password" style="padding-right:3rem;" oninput="evaluatePasswordStrength(this.value, 'reset')" onkeyup="handleCapsLockCheck(event, 'caps-warning-reset')" onkeydown="handleCapsLockCheck(event, 'caps-warning-reset')">
-                  <button type="button" onclick="togglePasswordVis('new-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                  <button type="button" onclick="togglePasswordVis('new-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);display:flex;align-items:center;padding:0.25rem;" title="Lihat/Sembunyikan Password">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
                 </div>
-                <div id="caps-warning-reset" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+                <div id="caps-warning-reset" class="caps-warning" style="display:none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <span>Caps Lock aktif pada keyboard</span>
+                </div>
 
                 <!-- Password Strength Meter Realtime -->
                 <div class="pw-strength-bar">
@@ -603,8 +643,8 @@
                   <span id="reset-pw-score" style="color:var(--tertiary);">-</span>
                 </div>
                 <div class="pw-criteria-list">
-                  <span class="pw-criteria-item" id="reset-crit-len">⚪ Minimal 6 karakter</span>
-                  <span class="pw-criteria-item" id="reset-crit-combo">⚪ Kombinasi huruf &amp; angka</span>
+                  <span class="pw-criteria-item" id="reset-crit-len">Minimal 6 karakter</span>
+                  <span class="pw-criteria-item" id="reset-crit-combo">Kombinasi huruf &amp; angka</span>
                 </div>
               </div>
 
@@ -612,9 +652,14 @@
                 <label class="form-label">Konfirmasi Password Baru <span style="color:var(--error);">*</span></label>
                 <div style="position:relative;">
                   <input type="password" id="confirm-new-password" class="form-control" placeholder="Ketik ulang password baru" required minlength="6" autocomplete="new-password" style="padding-right:3rem;" onkeyup="handleCapsLockCheck(event, 'caps-warning-reset-conf')" onkeydown="handleCapsLockCheck(event, 'caps-warning-reset-conf')">
-                  <button type="button" onclick="togglePasswordVis('confirm-new-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);" title="Lihat/Sembunyikan Password">👁️</button>
+                  <button type="button" onclick="togglePasswordVis('confirm-new-password')" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tertiary);display:flex;align-items:center;padding:0.25rem;" title="Lihat/Sembunyikan Password">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
                 </div>
-                <div id="caps-warning-reset-conf" class="caps-warning" style="display:none;">⚠️ Caps Lock Aktif pada keyboard Anda</div>
+                <div id="caps-warning-reset-conf" class="caps-warning" style="display:none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <span>Caps Lock aktif pada keyboard</span>
+                </div>
               </div>
 
               <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.75rem;" id="reset-submit-btn">
@@ -624,7 +669,7 @@
 
             <div style="margin-top:1.5rem;text-align:center;">
               <a href="javascript:void(0)" onclick="cancelPasswordRecovery()" style="color:var(--tertiary);font-size:0.8125rem;text-decoration:none;display:inline-flex;align-items:center;gap:0.35rem;">
-                ← Batal &amp; Kembali ke Halaman Masuk
+                &larr; Batal &amp; Kembali ke Halaman Masuk
               </a>
             </div>
           </div>
@@ -679,13 +724,16 @@
     const hasSymbols = /[^a-zA-Z0-9]/.test(password || '');
     const isCombo = hasLetters && hasNumbers;
 
+    const checkIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" style="margin-right:5px;vertical-align:-1px;"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    const dotIcon = '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#94a3b8;margin-right:6px;vertical-align:middle;"></span>';
+
     if (critLen) {
       critLen.className = 'pw-criteria-item ' + (hasMinLen ? 'valid' : '');
-      critLen.innerHTML = (hasMinLen ? '✅' : '⚪') + ' Minimal 6 karakter';
+      critLen.innerHTML = (hasMinLen ? checkIcon : dotIcon) + ' Minimal 6 karakter';
     }
     if (critCombo) {
       critCombo.className = 'pw-criteria-item ' + (isCombo ? 'valid' : '');
-      critCombo.innerHTML = (isCombo ? '✅' : '⚪') + ' Kombinasi huruf &amp; angka';
+      critCombo.innerHTML = (isCombo ? checkIcon : dotIcon) + ' Kombinasi huruf &amp; angka';
     }
 
     if (!password) {
@@ -1414,9 +1462,19 @@
     }
   }
 
-  function togglePasswordVis(inputId = 'login-password') {
+  function togglePasswordVis(inputId = 'login-password', btnEl = null) {
     const pw = document.getElementById(inputId);
-    if (pw) pw.type = pw.type === 'password' ? 'text' : 'password';
+    if (!pw) return;
+    const isNowText = pw.type === 'password';
+    pw.type = isNowText ? 'text' : 'password';
+    const btn = btnEl || (window.event && window.event.currentTarget) || pw.parentElement?.querySelector('button');
+    if (btn) {
+      if (isNowText) {
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="23" x2="23" y2="1"></line></svg>`;
+      } else {
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+      }
+    }
   }
 
   async function handleLogout() {
